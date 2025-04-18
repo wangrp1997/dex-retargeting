@@ -34,10 +34,11 @@
   <img src="example/vector_retargeting/teaser.webp" alt="Retargeting with different hands.">
 </div>
 
-## rpwang
+## Update
 
 ```shell
-fork in 2025-04-13
+2025-04-18 creat the dev env for rtx 5080
+2025-04-13 fork this repo 
 ```
 
 ## Installation

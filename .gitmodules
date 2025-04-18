@@ -1,4 +1,4 @@
 [submodule "assets"]
 	path = assets
-    url = git@github.com:dexsuite/dex-urdf.git
+	url = https://github.com/dexsuite/dex-urdf.git
 	branch = main
