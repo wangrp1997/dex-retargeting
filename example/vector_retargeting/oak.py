@@ -17,7 +17,13 @@ class OakCamera:
                  resolution="full",
                  internal_frame_height=640):
                  
-        self.device = dai.Device()
+        # 检查设备是否可用
+        try:
+            self.device = dai.Device()
+            print("OAK-D device found and initialized")
+        except Exception as e:
+            print(f"Error initializing OAK-D device: {str(e)}")
+            raise
         
         if input_src == None or input_src == "rgb" or input_src == "rgb_laconic":
             self.input_type = "rgb"
