@@ -44,6 +44,7 @@ example = [
     "mediapipe",
     "sapien==3.0.0b0",
     "loguru",
+    "depthai>=2.13"
 ]
 
 [tool.ruff.lint.isort]
