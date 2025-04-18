@@ -64,6 +64,45 @@ to [@xbkaishui](https://github.com/xbkaishui) for contributing the initial pull 
 ![realtime_example](data/realtime_example.webp)
 
 
+### Capture Video Using OAK-D Camera
 
+*The following instructions assume you have an OAK-D camera connected.*
+
+First, ensure you have the proper permissions set up for the OAK-D camera:
+```bash
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"' | sudo tee /etc/udev/rules.d/80-movidius.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+#### Basic RGB Video Recording
+```bash
+python3 capture_oak.py \
+  --video-path data/my_human_hand_video.mp4 \
+  --no-save-depth \
+  --resolution full
+```
+
+#### Recording with Depth Data
+```bash
+python3 capture_oak.py \
+  --video-path data/my_human_hand_video.mp4 \
+  --save-depth \
+  --resolution full
+```
+This will generate two files:
+- `data/my_human_hand_video.mp4`: RGB video
+- `data/my_human_hand_video_depth.mp4`: Depth video
+
+#### Available Options
+- `--resolution`: Choose between "full" (1280x800) or "ultra" (3840x2160)
+- `--save-depth`: Enable depth recording
+- `--no-save-depth`: Disable depth recording
+- `--internal-fps`: Set custom frame rate
+- `--crop`: Enable square crop mode
+- `--internal-frame-height`: Set internal processing height (default: 640)
+
+To stop recording, press `Esc` on your keyboard.
+
+Note: The depth data is automatically normalized and saved in a viewable format. When using the depth video for further processing, please be aware that the values have been compressed to 8-bit format.
 
 
