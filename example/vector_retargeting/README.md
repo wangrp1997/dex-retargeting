@@ -106,3 +106,8 @@ To stop recording, press `Esc` on your keyboard.
 Note: The depth data is automatically normalized and saved in a viewable format. When using the depth video for further processing, please be aware that the values have been compressed to 8-bit format.
 
 
+### Real-time Visualization of Hand Retargeting via OAK-D
+
+```bash
+python3 show_realtime_retargeting_oak1.py --robot-name botyard --retargeting-type dexpilot --hand-type left --resolution full
+```
