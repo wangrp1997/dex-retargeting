@@ -54,6 +54,7 @@ To run the example, you may need additional dependencies for rendering and hand 
 git clone https://github.com/dexsuite/dex-retargeting
 cd dex-retargeting
 pip install -e ".[example]"
+git submodule update --init --recursive
 ```
 
 ## Changelog
