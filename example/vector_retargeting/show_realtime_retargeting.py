@@ -87,9 +87,12 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         loader.scale = 1.4
     elif "svh" in robot_name:
         loader.scale = 1.5
+    elif "botyard" in robot_name:
+        loader.scale = 0.9
 
     if "glb" not in robot_name:
-        filepath = str(filepath).replace(".urdf", "_glb.urdf")
+        # filepath = str(filepath).replace(".urdf", "_glb.urdf")
+        filepath = str(filepath)
     else:
         filepath = str(filepath)
 
