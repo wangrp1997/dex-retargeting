@@ -112,10 +112,13 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         robot.set_pose(sapien.Pose([0, 0, -0.15]))
     elif "svh" in robot_name:
         robot.set_pose(sapien.Pose([0, 0, -0.13]))
+    elif "botyard" in robot_name:
+        robot.set_pose(sapien.Pose([0, 0, -0.2], [-0.707, 0, 0, 0.707]))  # 添加四元数旋转
 
     # Different robot loader may have different orders for joints
     sapien_joint_names = [joint.get_name() for joint in robot.get_active_joints()]
     retargeting_joint_names = retargeting.joint_names
+
     retargeting_to_sapien = np.array(
         [retargeting_joint_names.index(name) for name in sapien_joint_names]
     ).astype(int)

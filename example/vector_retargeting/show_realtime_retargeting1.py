@@ -67,7 +67,7 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
     cam = scene.add_camera(
         name="Cheese!", width=600, height=600, fovy=1, near=0.1, far=10
     )
-    cam.set_local_pose(sapien.Pose([0.50, 0, 0.0], [0, 0, 0, -1]))
+    cam.set_local_pose(sapien.Pose([0.30, 0, 0.0], [0, 0, 0, -1]))
 
     viewer = Viewer()
     viewer.set_scene(scene)
@@ -95,9 +95,12 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         loader.scale = 1.4
     elif "svh" in robot_name:
         loader.scale = 1.5
+    elif "botyard" in robot_name:
+        loader.scale = 0.9
 
     if "glb" not in robot_name:
-        filepath = str(filepath).replace(".urdf", "_glb.urdf")
+        # filepath = str(filepath).replace(".urdf", "_glb.urdf")
+        filepath = str(filepath)
     else:
         filepath = str(filepath)
 
@@ -117,9 +120,12 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         robot.set_pose(sapien.Pose([0, 0, -0.15]))
     elif "svh" in robot_name:
         robot.set_pose(sapien.Pose([0, 0, -0.13]))
+    elif "botyard" in robot_name:
+        robot.set_pose(sapien.Pose([0, 0, -0.2], [-0.707, 0, 0, 0.707]))  # 添加四元数旋转
 
     # Different robot loader may have different orders for joints
     sapien_joint_names = [joint.get_name() for joint in robot.get_active_joints()]
+
     retargeting_joint_names = retargeting.joint_names
     retargeting_to_sapien = np.array(
         [retargeting_joint_names.index(name) for name in sapien_joint_names]
@@ -160,7 +166,7 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
             else:
                 # 未检测到手部
                 hand_lost_frames += 1
-                logger.warning(f"{hand_type} hand is not detected. Lost frames: {hand_lost_frames}")
+                # logger.warning(f"{hand_type} hand is not detected. Lost frames: {hand_lost_frames}")
         else:
             # 使用上一帧的检测结果
             joint_pos = last_joint_pos
@@ -190,6 +196,13 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
                 ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
             qpos = retargeting.retarget(ref_value)
             robot.set_qpos(qpos[retargeting_to_sapien])
+            
+            # 打印关节名称和对应的 qpos 值
+            print("\n当前关节状态:")
+            print("-" * 50)
+            for i, joint_name in enumerate(sapien_joint_names):
+                print(f"{joint_name}: {qpos[retargeting_to_sapien][i]:.4f}")
+            print("-" * 50)
 
         # 减少渲染次数
         viewer.render()
