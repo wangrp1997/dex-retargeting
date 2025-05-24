@@ -55,7 +55,7 @@ git clone https://github.com/dexsuite/dex-retargeting
 cd dex-retargeting
 pip install -e ".[example]"
 git submodule update --init --recursive
-sed -i 's|filename="package://dexhand_description/|filename="|g' assets/robots/hands/botyard_hand/botyard_hand.urdf
+sed -i 's|filename="package://dexhand_description/|filename="|g' assets/robots/hands/botyard_hand/botyard_hand_left.urdf
 ```
 
 ## Changelog
