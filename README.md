@@ -37,8 +37,9 @@
 ## Update
 
 ```shell
-2025-05-24 creat the dev env for rtx 4070 laptop
-2025-04-18 creat the dev env for rtx 5080
+2025-05-6 create the branch for ros2
+2025-05-24 create the dev env for rtx 4070 laptop
+2025-04-18 create the dev env for rtx 5080
 2025-04-13 fork this repo 
 ```
 
