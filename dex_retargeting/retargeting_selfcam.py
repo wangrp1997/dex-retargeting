@@ -241,7 +241,7 @@ class RetargetingNode(Node):
             bgr = self.detector.draw_skeleton_on_image(bgr, keypoint_2d, style="default")
             
         # 显示状态信息
-        status_text = f"Hand {'Lost' if self.hand_lost_frames > 0 else 'Tracked'} ({self.hand_lost_frames} frames)"
+        status_text = f"Hand Lost ({self.hand_lost_frames} frames)"
         cv2.putText(bgr, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         
         # 显示图像
@@ -257,6 +257,7 @@ class RetargetingNode(Node):
             # 计算关节角度
             retargeting_type = self.retargeting.optimizer.retargeting_type
             indices = self.retargeting.optimizer.target_link_human_indices
+
             if retargeting_type == "POSITION":
                 ref_value = joint_pos[indices, :]
             else:
@@ -264,7 +265,11 @@ class RetargetingNode(Node):
                 task_indices = indices[1, :]
                 ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
                 
-            qpos = self.retargeting.retarget(ref_value)
+                # 创建固定关节数组，长度为 2（对应 FAJ1 和 FAJ3）
+            fixed_qpos = np.zeros(2)  # 两个关节都设为 0
+            
+            # 调用 retarget 时传入固定关节值
+            qpos = self.retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
             
             # 更新机器人关节角度（仅在非无头模式下）
             if not self.headless and hasattr(self, 'robot') and hasattr(self, 'viewer'):

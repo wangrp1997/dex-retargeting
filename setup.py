@@ -8,6 +8,12 @@ setup(
     name=package_name,
     version='0.5.0',
     packages=find_packages(exclude=['test']),
+    package_data={
+        'dex_retargeting': [
+            'src/dex_retargeting/configs/offline/*.yml',
+            'src/dex_retargeting/configs/teleop/*.yml',
+        ],
+    },
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -29,7 +35,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'retargeting_node = dex_retargeting.retargeting:main',
+            'retargeting_node = dex_retargeting.retargeting_oak:main',
         ],
     },
 )

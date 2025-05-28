@@ -4,11 +4,9 @@ from typing import Optional
 import numpy as np
 from pytransform3d import rotations
 
-from dex_retargeting.src.dex_retargeting.constants import OPERATOR2MANO, HandType
-from dex_retargeting.src.dex_retargeting.optimizer import Optimizer
-from dex_retargeting.src.dex_retargeting.optimizer_utils import LPFilter
-from dex_retargeting.src.dex_retargeting.retargeting_config import RetargetingConfig
-from dex_retargeting.src.dex_retargeting.robot_wrapper import RobotWrapper
+from dex_retargeting.constants import OPERATOR2MANO, HandType
+from dex_retargeting.optimizer import Optimizer
+from dex_retargeting.optimizer_utils import LPFilter
 
 
 class SeqRetargeting:
@@ -31,10 +29,11 @@ class SeqRetargeting:
             self.optimizer.set_joint_limit(joint_limits[self.optimizer.idx_pin2target])
         self.joint_limits = joint_limits[self.optimizer.idx_pin2target]
 
-        # Temporal information
+        # # Temporal information
         self.last_qpos = joint_limits.mean(1)[self.optimizer.idx_pin2target].astype(
             np.float32
         )
+
         self.accumulated_time = 0
         self.num_retargeting = 0
 
@@ -114,13 +113,26 @@ class SeqRetargeting:
     def retarget(self, ref_value, fixed_qpos=np.array([])):
         tic = time.perf_counter()
 
-        qpos = self.optimizer.retarget(
-            ref_value=ref_value.astype(np.float32),
-            fixed_qpos=fixed_qpos.astype(np.float32),
-            last_qpos=np.clip(
-                self.last_qpos, self.joint_limits[:, 0], self.joint_limits[:, 1]
-            ),
-        )
+        # 处理 ref_value 是字典的情况
+        if isinstance(ref_value, dict):
+            # 如果是字典，直接传递给优化器
+            qpos = self.optimizer.retarget(
+                ref_value=ref_value,
+                fixed_qpos=fixed_qpos.astype(np.float32),
+                last_qpos=np.clip(
+                    self.last_qpos, self.joint_limits[:, 0], self.joint_limits[:, 1]
+                ),
+            )
+        else:
+            # 如果是数组，保持原来的处理方式
+            qpos = self.optimizer.retarget(
+                ref_value=ref_value.astype(np.float32),
+                fixed_qpos=fixed_qpos.astype(np.float32),
+                last_qpos=np.clip(
+                    self.last_qpos, self.joint_limits[:, 0], self.joint_limits[:, 1]
+                ),
+            )
+
         self.accumulated_time += time.perf_counter() - tic
         self.num_retargeting += 1
         self.last_qpos = qpos
