@@ -48,6 +48,8 @@ class RetargetingConfig:
     # Optimization parameters
     normal_delta: float = 4e-3
     huber_delta: float = 2e-2
+    huber_delta_pos: float = 0.02
+    huber_delta_vec: float = 0.03
 
     # DexPilot optimizer parameters
     project_dist: float = 0.03
@@ -62,7 +64,11 @@ class RetargetingConfig:
     # Low pass filter
     low_pass_alpha: float = 0.1
 
-    _TYPE = ["vector", "position", "dexpilot"]
+    # Hybrid optimizer specific parameters
+    position_weight: Optional[float] = None
+    vector_weight: Optional[float] = None
+
+    _TYPE = ["vector", "position", "dexpilot", "hybrid", "position_pinch"]
     _DEFAULT_URDF_DIR = "./"
 
     def __post_init__(self):
@@ -122,6 +128,26 @@ class RetargetingConfig:
                     "If you do not know exactly how it is used, please leave it to None for default.\n"
                     "\033[00m",
                 )
+        elif self.type == "hybrid":
+            # 混合方法需要同时满足 position 和 dexpilot 的要求
+            if self.finger_tip_link_names is None or self.wrist_link_name is None:
+                raise ValueError(
+                    "Hybrid retargeting requires: finger_tip_link_names + wrist_link_name"
+                )
+            if self.target_link_names is None:
+                raise ValueError("Hybrid retargeting requires: target_link_names")
+            if self.position_weight is None or self.vector_weight is None:
+                raise ValueError("Hybrid retargeting requires: position_weight and vector_weight")
+        elif self.type == "position_pinch":
+            # position_pinch 需要同时满足 position 和 dexpilot 的要求
+            if self.finger_tip_link_names is None or self.wrist_link_name is None:
+                raise ValueError(
+                    "PositionPinch retargeting requires: finger_tip_link_names + wrist_link_name"
+                )
+            if self.target_link_names is None:
+                raise ValueError("PositionPinch retargeting requires: target_link_names")
+            if self.target_link_human_indices is None:
+                raise ValueError("PositionPinch retargeting requires: target_link_human_indices")
 
         # URDF path check
         urdf_path = Path(self.urdf_path)
@@ -169,6 +195,8 @@ class RetargetingConfig:
             VectorOptimizer,
             PositionOptimizer,
             DexPilotOptimizer,
+            HybridOptimizer,
+            PositionPinchOptimizer,
         )
         import tempfile
 
@@ -225,6 +253,40 @@ class RetargetingConfig:
                 scaling=self.scaling_factor,
                 project_dist=self.project_dist,
                 escape_dist=self.escape_dist,
+            )
+        elif self.type == "hybrid":
+            optimizer = HybridOptimizer(
+                robot,
+                joint_names,
+                target_link_names=self.target_link_names,  # 用于位置损失的所有连杆
+                finger_tip_link_names=self.finger_tip_link_names,  # 用于向量损失的指尖连杆
+                target_link_human_indices=self.target_link_human_indices,  # 用于位置损失的人类关节索引
+                wrist_link_name=self.wrist_link_name,
+                target_link_human_indices_vec=None,  # 用于 dex 损失的人类关节索引，默认自动生成
+                huber_delta_pos=self.huber_delta_pos,  # 位置损失的 huber delta
+                huber_delta_vec=self.huber_delta_vec,  # 向量损失的 huber delta
+                norm_delta=self.normal_delta,
+                project_dist=self.project_dist,
+                escape_dist=self.escape_dist,
+                scaling=self.scaling_factor,
+                position_weight=self.position_weight,
+                vector_weight=self.vector_weight,
+            )
+        elif self.type == "position_pinch":
+            optimizer = PositionPinchOptimizer(
+                robot,
+                joint_names,
+                target_link_names=self.target_link_names,  # 用于位置损失的所有连杆
+                finger_tip_link_names=self.finger_tip_link_names,  # 用于向量损失的指尖连杆
+                target_link_human_indices=self.target_link_human_indices,  # 用于位置损失的人类关节索引
+                wrist_link_name=self.wrist_link_name,
+                target_link_human_indices_vec=None,  # 用于 dex 损失的人类关节索引，默认自动生成
+                huber_delta_pos=self.huber_delta_pos,  # 位置损失的 huber delta
+                huber_delta_vec=self.huber_delta_vec,  # 向量损失的 huber delta
+                norm_delta=self.normal_delta,
+                project_dist=self.project_dist,
+                escape_dist=self.escape_dist,
+                scaling=self.scaling_factor,
             )
         else:
             raise RuntimeError()

@@ -34,10 +34,10 @@ class RobotName(enum.Enum):
 
 class RetargetingType(enum.Enum):
     vector = enum.auto()  # For teleoperation, no finger closing prior
-    position = (
-        enum.auto()
-    )  # For offline data processing, especially hand-object interaction data
+    position = enum.auto()  # For offline data processing, especially hand-object interaction data
     dexpilot = enum.auto()  # For teleoperation, with finger closing prior
+    hybrid = enum.auto()  # For teleoperation, combining position and vector methods
+    position_pinch = enum.auto()  # For teleoperation, position mode with automatic switch to dexpilot when pinching
 
 
 class HandType(enum.Enum):
@@ -71,13 +71,13 @@ def get_default_config_path(
     robot_name_str = ROBOT_NAME_MAP[robot_name]
     hand_type_str = hand_type.name
     if "gripper" in robot_name_str:  # For gripper robots, only use gripper config file.
-        if retargeting_type == RetargetingType.dexpilot:
-            config_name = f"{robot_name_str}_dexpilot.yml"
+        if retargeting_type in [RetargetingType.dexpilot, RetargetingType.hybrid, RetargetingType.position_pinch]:
+            config_name = f"{robot_name_str}_{retargeting_type.name}.yml"
         else:
             config_name = f"{robot_name_str}.yml"
     else:
-        if retargeting_type == RetargetingType.dexpilot:
-            config_name = f"{robot_name_str}_{hand_type_str}_dexpilot.yml"
+        if retargeting_type in [RetargetingType.dexpilot, RetargetingType.hybrid, RetargetingType.position_pinch]:
+            config_name = f"{robot_name_str}_{hand_type_str}_{retargeting_type.name}.yml"
         else:
             config_name = f"{robot_name_str}_{hand_type_str}.yml"
     return config_path / config_name

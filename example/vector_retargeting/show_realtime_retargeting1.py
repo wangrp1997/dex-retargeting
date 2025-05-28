@@ -190,19 +190,40 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
             if retargeting_type == "POSITION":
                 indices = indices
                 ref_value = joint_pos[indices, :]
-            else:
+            elif retargeting_type == "DEXPILOT":
                 origin_indices = indices[0, :]
                 task_indices = indices[1, :]
                 ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
-            qpos = retargeting.retarget(ref_value)
+            elif retargeting_type == "HYBRID":
+                indices_vec = retargeting.optimizer.target_link_human_indices_vec
+                origin_indices = indices_vec[0, :]
+                task_indices = indices_vec[1, :]
+                ref_value = {
+                    "position": joint_pos[indices, :],
+                    "vector": joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                }
+            elif retargeting_type == "POSITION_PINCH":
+                # 和 hybrid 一样，需要同时提供位置和向量信息
+                indices_vec = retargeting.optimizer.target_link_human_indices_vec
+                origin_indices = indices_vec[0, :]
+                task_indices = indices_vec[1, :]
+                ref_value = {
+                    "target_pos": joint_pos[indices, :],  # 注意这里用 target_pos 而不是 position
+                    "target_vec": joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                }
+            else:
+                raise ValueError(f"Unsupported retargeting type: {retargeting_type}")
+            
+            fixed_qpos = np.zeros(3)  # 两个关节都设为 0
+            qpos = retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
             robot.set_qpos(qpos[retargeting_to_sapien])
             
             # 打印关节名称和对应的 qpos 值
-            print("\n当前关节状态:")
-            print("-" * 50)
-            for i, joint_name in enumerate(sapien_joint_names):
-                print(f"{joint_name}: {qpos[retargeting_to_sapien][i]:.4f}")
-            print("-" * 50)
+            # print("\n当前关节状态:")
+            # print("-" * 50)
+            # for i, joint_name in enumerate(sapien_joint_names):
+            #     print(f"{joint_name}: {qpos[retargeting_to_sapien][i]:.4f}")
+            # print("-" * 50)
 
         # 减少渲染次数
         viewer.render()
