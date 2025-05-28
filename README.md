@@ -62,6 +62,7 @@ sed -i 's|filename="package://dexhand_description/|filename="|g' assets/robots/h
 ## Run
 ```shell
 ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=position -p hand_type:=left -p headless:=true
+ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=position_pinch -p hand_type:=left -p resolution:=full -p headless:=false
 ```
 
 ## Changelog
