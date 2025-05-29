@@ -948,6 +948,7 @@ class PositionPinchOptimizer(Optimizer):
         target_vec_dist = np.linalg.norm(target_vec[:len_proj], axis=1)
         
         # 更新投影状态
+        self.dexpilot_optimizer.project_dist = 0.02
         self.projected[:len_s1][target_vec_dist[0:len_s1] < self.dexpilot_optimizer.project_dist] = True
         self.projected[:len_s1][target_vec_dist[0:len_s1] > self.dexpilot_optimizer.escape_dist] = False
         self.projected[len_s1:len_proj] = np.logical_and(
