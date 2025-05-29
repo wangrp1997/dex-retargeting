@@ -1,0 +1,125 @@
+computed_link_indices:
+- 45
+- 23
+- 55
+- 35
+- 65
+- 9
+hand_type: Left
+human_scale: 0.11604019017285282
+initial_joint_angles:
+  FAJ1: 0.0
+  FAJ3: 0.0
+  FFJ1: 0.0
+  FFJ2: 0.0
+  FFJ3: 0.0
+  FFJ4: 0.13189999759197235
+  LFJ1: 0.0
+  LFJ2: 0.0
+  LFJ3: 0.0
+  LFJ4: -0.13189999759197235
+  LFJ5: 0.0
+  MFJ1: 0.0
+  MFJ2: 0.0
+  MFJ3: 0.0
+  MFJ4: 0.0
+  RFJ1: 0.0
+  RFJ2: 0.0
+  RFJ3: 0.0
+  RFJ4: -0.06544999778270721
+  THJ1: 0.0
+  THJ2: 0.0
+  THJ3: 0.0
+  THJ4: 0.0
+joint_names:
+- FAJ3
+- FAJ1
+- FFJ4
+- FFJ3
+- FFJ2
+- FFJ1
+- LFJ5
+- LFJ4
+- LFJ3
+- LFJ2
+- LFJ1
+- MFJ4
+- MFJ3
+- MFJ2
+- MFJ1
+- RFJ4
+- RFJ3
+- RFJ2
+- RFJ1
+- THJ4
+- THJ3
+- THJ2
+- THJ1
+origin_link_indices:
+- 1
+- 0
+- 2
+- 3
+- 0
+- 2
+- 3
+- 2
+- 3
+- 3
+- 5
+- 5
+- 5
+- 5
+- 5
+retargeting_type: DEXPILOT
+robot_name: botyard_hand_left
+robot_scale: 0.14300457717087642
+scaling_factor: 1.2323711031312308
+target_link_human_indices:
+- - 8
+  - 12
+  - 16
+  - 20
+  - 12
+  - 16
+  - 20
+  - 16
+  - 20
+  - 20
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+- - 4
+  - 4
+  - 4
+  - 4
+  - 8
+  - 8
+  - 8
+  - 12
+  - 12
+  - 16
+  - 4
+  - 8
+  - 12
+  - 16
+  - 20
+task_link_indices:
+- 4
+- 4
+- 4
+- 4
+- 1
+- 1
+- 1
+- 0
+- 0
+- 2
+- 4
+- 1
+- 0
+- 2
+- 3
+timestamp: 2025-05-29_14-45-00
