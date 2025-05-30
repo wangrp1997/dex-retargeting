@@ -6,3 +6,5 @@ if find_spec("torch") is None:
         "pip install torch --index-url https://download.pytorch.org/whl/cpu\n"
         "Note that cpu-only torch already works for dex-retargeting."
     )
+
+from .yourdfpy import *

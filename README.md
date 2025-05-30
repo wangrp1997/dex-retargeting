@@ -47,7 +47,25 @@
 ## Installation
 
 ```shell
-pip install dex_retargeting
+！！！不要pip安装dex_retargeting
+安装并激活虚拟环境
+修改setup.py
+colcon build --packages-select dex_retargeting
+跑ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=position_pinch -p hand_type:=left -p resolution:=full -p headless:=false
+修改install/dex_retargeting/lib/dex_retargeting/retargeting_node的第一行为#!/home/rw/ros2_ws/venv/bin/python3
+
+根据报错对src中的包导入路径进行修改
+pip 安装各种缺失的包
+sudo apt install ros-jazzy-pinocchio
+
+oak相机问题：
+lsusb | grep Movidius
+ls -l /dev/bus/usb/001/021(例子)
+需要出现类似的crw-rw-rw root plugdev ...才可以，否则运行下面的指令 重新插拔相机后再检查权限
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"' | sudo tee /etc/udev/rules.d/80-movidius.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+参考https://docs.oakchina.cn/pages/troubleshooting.html#ma2480-3
+
 ```
 
 To run the example, you may need additional dependencies for rendering and hand pose detection.
@@ -55,7 +73,7 @@ To run the example, you may need additional dependencies for rendering and hand 
 ```shell
 git clone https://github.com/dexsuite/dex-retargeting
 cd dex-retargeting
-pip install -e ".[example]"
+不要pip install -e ".[example]"
 git submodule update --init --recursive
 sed -i 's|filename="package://dexhand_description/|filename="|g' assets/robots/hands/botyard_hand/botyard_hand_left.urdf
 ```

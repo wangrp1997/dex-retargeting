@@ -4,10 +4,14 @@ from glob import glob
 
 package_name = 'dex_retargeting'
 
+# 获取虚拟环境的 Python 解释器路径
+venv_python = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'venv', 'bin', 'python3')
+
 setup(
-    name=package_name,
+    name='dex_retargeting',
     version='0.5.0',
-    packages=find_packages(exclude=['test']),
+    packages=find_packages(where='.', include=['dex_retargeting', 'dex_retargeting.src', 'dex_retargeting.src.dex_retargeting']),
+    package_dir={'': '.'},
     package_data={
         'dex_retargeting': [
             'src/dex_retargeting/configs/offline/*.yml',
@@ -25,7 +29,13 @@ setup(
     ],
     install_requires=[
         'setuptools',
-        'dex_retargeting',
+        'torch',
+        'opencv-python',
+        'loguru',
+        'sapien==3.0.0b0',
+        'anytree',
+        'six',
+        'pytransform3d',
     ],
     zip_safe=True,
     maintainer='rw',
@@ -37,5 +47,11 @@ setup(
         'console_scripts': [
             'retargeting_node = dex_retargeting.retargeting_oak:main',
         ],
+    },
+    python_requires='>=3.7,<3.13',
+    options={
+        'build_scripts': {
+            'executable': venv_python,
+        },
     },
 )

@@ -1,0 +1,2 @@
+[console_scripts]
+retargeting_node = dex_retargeting.retargeting_oak:main

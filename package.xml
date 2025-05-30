@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>dex_retargeting</name>
-  <version>0.0.0</version>
+  <version>0.5.0</version>
   <description>ROS2 package for dex hand retargeting</description>
   <maintainer email="renpengwang@eqq.com">rw</maintainer>
   <license>TODO: License declaration</license>
@@ -19,7 +19,7 @@
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-sapien</exec_depend>
-  <exec_depend>python3-dex-retargeting</exec_depend>
+  <exec_depend>python3-dex_retargeting</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

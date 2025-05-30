@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: dex_retargeting
+Version: 0.5.0
+Summary: ROS2 package for dex hand retargeting
+Maintainer: rw
+Maintainer-email: renpengwang@eqq.com
+License: TODO: License declaration
+Requires-Python: >=3.7,<3.13
+Requires-Dist: setuptools
+Requires-Dist: dex_retargeting
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
