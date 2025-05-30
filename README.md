@@ -37,7 +37,7 @@
 ## Update
 
 ```shell
-2025-05-30 create the dev env for Retargeting from human hand video
+2025-05-30 create the dev env for retargeting from datasets
 2025-05-24 create the dev env for rtx 4070 laptop
 2025-04-18 create the dev env for rtx 5080
 2025-04-13 fork this repo 
