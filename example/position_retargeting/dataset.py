@@ -136,6 +136,7 @@ class DexYCBVideoDataset:
         self._subject_dirs = [
             sub for sub in self._data_dir.iterdir() if sub.stem in _SUBJECTS
         ]
+        print(self._subject_dirs)
         self._capture_meta = {}
         self._capture_pose = {}
         self._capture_filter = {}
@@ -148,6 +149,7 @@ class DexYCBVideoDataset:
 
                 if hand_type not in meta["mano_sides"]:
                     continue
+
 
                 pose = np.load((capture_dir / "pose.npz").resolve().__str__())
                 if self.use_filter:
@@ -168,6 +170,7 @@ class DexYCBVideoDataset:
                 self._capture_meta[capture_dir.stem] = meta
                 self._capture_pose[capture_dir.stem] = pose
                 self._captures.append(capture_dir.stem)
+
 
     def __len__(self):
         return len(self._captures)

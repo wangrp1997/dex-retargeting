@@ -56,11 +56,17 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
 
             # Build robot
             urdf_path = Path(config.urdf_path)
-            if "glb" not in urdf_path.stem:
-                urdf_path = urdf_path.with_stem(urdf_path.stem + "_glb")
-            robot_urdf = urdf.URDF.load(
-                str(urdf_path), add_dummy_free_joints=True, build_scene_graph=False
-            )
+            botyard_urdf_path = urdf_path
+            try:
+                if "glb" not in urdf_path.stem:
+                    urdf_path = urdf_path.with_stem(urdf_path.stem + "_glb")
+                robot_urdf = urdf.URDF.load(
+                    str(urdf_path), add_dummy_free_joints=True, build_scene_graph=False
+                )
+            except:
+                robot_urdf = urdf.URDF.load(
+                    str(botyard_urdf_path), add_dummy_free_joints=True, build_scene_graph=False
+                )
             urdf_name = urdf_path.name
             temp_dir = tempfile.mkdtemp(prefix="dex_retargeting-")
             temp_path = f"{temp_dir}/{urdf_name}"

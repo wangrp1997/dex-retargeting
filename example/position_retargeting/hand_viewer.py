@@ -41,7 +41,7 @@ def compute_smooth_shading_normal_np(vertices, indices):
 
 
 class HandDatasetSAPIENViewer:
-    def __init__(self, headless=False, use_ray_tracing=False):
+    def __init__(self, hand_type="right", headless=False, use_ray_tracing=False):
         # Setup
         if not use_ray_tracing:
             sapien.render.set_viewer_shader_dir("default")
@@ -90,7 +90,7 @@ class HandDatasetSAPIENViewer:
             )
 
         self.headless = headless
-
+        self.hand_type = hand_type
         # Create table
         white_diffuse = sapien.render.RenderMaterial()
         white_diffuse.set_base_color(np.array([0.8, 0.8, 0.8, 1]))
@@ -164,7 +164,9 @@ class HandDatasetSAPIENViewer:
         for ycb_id, ycb_mesh_file in zip(ycb_ids, ycb_mesh_files):
             self._load_ycb_object(ycb_id, ycb_mesh_file)
 
-        self.mano_layer = MANOLayer("right", hand_shape.astype(np.float32))
+        # print(self.hand_type.name)
+        # s=input()
+        self.mano_layer = MANOLayer(self.hand_type.name, hand_shape.astype(np.float32))
         self.mano_face = self.mano_layer.f.cpu().numpy()
         pose_vec = pt.pq_from_transform(extrinsic_mat)
         self.camera_pose = sapien.Pose(pose_vec[0:3], pose_vec[3:7]).inv()

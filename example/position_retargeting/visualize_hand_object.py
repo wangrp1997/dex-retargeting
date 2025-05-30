@@ -20,19 +20,19 @@ np.object = object
 np.unicode = np.unicode_
 
 
-def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: int):
-    dataset = DexYCBVideoDataset(data_root, hand_type="right")
+def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: int, hand_type: str, data_id: int):
+    dataset = DexYCBVideoDataset(data_root, hand_type=hand_type)
     if robots is None:
-        viewer = HandDatasetSAPIENViewer(headless=False)
+        viewer = HandDatasetSAPIENViewer(hand_type=hand_type, headless=False)
     else:
         viewer = RobotHandDatasetSAPIENViewer(
-            list(robots), HandType.right, headless=False
+            list(robots), HandType[hand_type], headless=False
         )
 
     # Data ID, feel free to change it to visualize different trajectory
-    data_id = 4
 
     sampled_data = dataset[data_id]
+
     for key, value in sampled_data.items():
         if "pose" not in key:
             print(f"{key}: {value}")
@@ -40,7 +40,11 @@ def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: in
     viewer.render_dexycb_data(sampled_data, fps)
 
 
-def main(dexycb_dir: str, robots: Optional[List[RobotName]] = None, fps: int = 10):
+def main(dexycb_dir: str,
+        robots: Optional[List[RobotName]] = None,
+        fps: int = 10,
+        hand_type: str = "right",
+        data_id: int = 0):
     """
     Render the human and robot trajectories for grasping object inside DexYCB dataset.
     The human trajectory is visualized as provided, while the robot trajectory is generated from position retargeting
@@ -61,7 +65,7 @@ def main(dexycb_dir: str, robots: Optional[List[RobotName]] = None, fps: int = 1
     else:
         print(f"Using DexYCB dir: {data_root}")
 
-    viz_hand_object(robots, data_root, fps)
+    viz_hand_object(robots, data_root, fps, hand_type, data_id)
 
 
 if __name__ == "__main__":

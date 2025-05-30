@@ -20,10 +20,10 @@ retargeting:
 
   # 用于位置优化的连杆
   target_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip",
-                       "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle" ]
+                       "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle",
+                       "thproximal", "ffproximal", "mfproximal", "rfproximal", "lfproximal" ]
 
-  # 用于位置优化的人类关节索引
-  target_link_human_indices: [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18 ]
+  target_link_human_indices: [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18, 1,5,9,13,17]
 
   # 用于 dexpilot 优化的连杆
   wrist_link_name: "pmbase"  # 左手使用 pmbase
