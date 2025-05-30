@@ -109,5 +109,14 @@ Note: The depth data is automatically normalized and saved in a viewable format.
 ### Real-time Visualization of Hand Retargeting via OAK-D
 
 ```bash
-python3 show_realtime_retargeting_oak1.py --robot-name botyard --retargeting-type dexpilot --hand-type left --resolution full
+注释ros相关环境变量后
+unset PYTHONPATH
+添加路径到环境变量（临时生效）：
+export PYTHONPATH=$CONDA_ENV_PATH/lib/python3.x/site-packages:$PYTHONPATH
+将 3.x 替换为你的 Python 版本（如 3.10）
+python3 show_realtime_retargeting_oak2.py --robot-name botyard --retargeting-type dexpilot --hand-type left --resolution full
+
+AttributeError: module 'pinocchio' has no attribute 'buildModelFromUrdf'
+在已激活的 dex-retargeting 环境中执行：
+conda install -c conda-forge pinocchio urdfdom urdfdom_headers
 ```
