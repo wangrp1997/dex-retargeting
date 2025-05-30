@@ -20,13 +20,13 @@ np.object = object
 np.unicode = np.unicode_
 
 
-def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: int, hand_type: str, data_id: int):
+def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: int, hand_type: str, data_id: int, fixed_joints_num: int):
     dataset = DexYCBVideoDataset(data_root, hand_type=hand_type)
     if robots is None:
         viewer = HandDatasetSAPIENViewer(hand_type=hand_type, headless=False)
     else:
         viewer = RobotHandDatasetSAPIENViewer(
-            list(robots), HandType[hand_type], headless=False
+            list(robots), HandType[hand_type], headless=False, fixed_joints_num=fixed_joints_num
         )
 
     # Data ID, feel free to change it to visualize different trajectory
@@ -44,7 +44,8 @@ def main(dexycb_dir: str,
         robots: Optional[List[RobotName]] = None,
         fps: int = 10,
         hand_type: str = "right",
-        data_id: int = 0):
+        data_id: int = 0,
+        fixed_joints_num: int = 2):
     """
     Render the human and robot trajectories for grasping object inside DexYCB dataset.
     The human trajectory is visualized as provided, while the robot trajectory is generated from position retargeting
@@ -53,6 +54,9 @@ def main(dexycb_dir: str,
         dexycb_dir: Data root path to the dexycb dataset
         robots: The names of robots to render, if None, render human hand trajectory only
         fps: frequency to render hand-object trajectory
+        hand_type: The type of hand to render, either "left" or "right"
+        data_id: The index of the data to render
+        fixed_joints_num: The number of fixed joints for the robot hands
 
     """
     data_root = Path(dexycb_dir).absolute()
@@ -65,7 +69,7 @@ def main(dexycb_dir: str,
     else:
         print(f"Using DexYCB dir: {data_root}")
 
-    viz_hand_object(robots, data_root, fps, hand_type, data_id)
+    viz_hand_object(robots, data_root, fps, hand_type, data_id, fixed_joints_num)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
         self,
         robot_names: List[RobotName],
         hand_type: HandType,
+        fixed_joints_num: int,
         headless=False,
         use_ray_tracing=False,
     ):
@@ -36,6 +37,7 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
         self.retargetings: List[SeqRetargeting] = []
         self.retarget2sapien: List[np.ndarray] = []
         self.hand_type = hand_type
+        self.fixed_joints_num = fixed_joints_num
 
         # Load optimizer and filter
         loader = self.scene.create_urdf_loader()
@@ -183,7 +185,8 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
             ):
                 indices = retargeting.optimizer.target_link_human_indices
                 ref_value = joint[indices, :]
-                qpos = retargeting.retarget(ref_value)[retarget2sapien]
+                fixed_qpos = np.zeros(self.fixed_joints_num)
+                qpos = retargeting.retarget(ref_value, fixed_qpos)[retarget2sapien]
                 robot.set_qpos(qpos)
 
             self.scene.update_render()

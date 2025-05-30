@@ -83,5 +83,8 @@ Visualize the retargeting results for multiple robot hands along with the human 
 
 ```shell
 python visualize_hand_object.py --dexycb-dir=PATH_TO_YOUR_DEXYCB_DIR_ROOT --robots allegro shadow svh
+
+for botyard:
+python visualize_hand_object.py --dexycb-dir=/home/rw/Projects/dex-retargeting/datasets --robots botyard --hand_type left --data-id 26 --fixed-joints-num 2
 # Close the viewer window to quit
 ```
