@@ -93,7 +93,7 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
             for ycb_id, ycb_mesh_file in zip(ycb_ids, ycb_mesh_files):
                 self._load_ycb_object(ycb_id, ycb_mesh_file)
 
-    def render_dexycb_data(self, data: Dict, fps=5, y_offset=0.8):
+    def render_dexycb_data(self, data: Dict, fps=5, y_offset=0.8, data_id=0):
         # Set table and viewer pose for better visual effect only
         global_y_offset = -y_offset * len(self.robots) / 2
         self.table.set_pose(sapien.Pose([0.5, global_y_offset + 0.2, 0]))
@@ -128,16 +128,23 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
 
         if self.headless:
             robot_names = [robot.name for robot in self.robot_names]
-            robot_names = "_".join(robot_names)
-            video_path = (
-                Path(__file__).parent.resolve() / f"data/{robot_names}_video.mp4"
-            )
-            writer = cv2.VideoWriter(
-                str(video_path),
-                cv2.VideoWriter_fourcc(*"mp4v"),
-                30.0,
-                (self.camera.get_width(), self.camera.get_height()),
-            )
+            robot_names = '_'.join(robot_names)
+            data_dir = Path(__file__).parent.resolve() / 'data'
+            data_dir.mkdir(exist_ok=True)
+            video_path = data_dir / f'{robot_names}_video_{data_id}.mp4'
+            try:
+                writer = cv2.VideoWriter(
+                    str(video_path),
+                    cv2.VideoWriter_fourcc(*'mp4v'),
+                    30.0,
+                    (self.camera.get_width(), self.camera.get_height()),
+                )
+                if not writer.isOpened():
+                    raise RuntimeError(f'无法创建视频文件: {video_path}')
+                print(f'视频将保存到: {video_path}')
+            except Exception as e:
+                print(f'创建视频写入器失败: {e}')
+                raise
 
         # Warm start
         hand_pose_start = hand_pose[start_frame]
@@ -203,4 +210,9 @@ class RobotHandDatasetSAPIENViewer(HandDatasetSAPIENViewer):
             self.viewer.paused = True
             self.viewer.render()
         else:
-            writer.release()
+            try:
+                writer.release()
+                print(f'视频已保存到: {video_path}')
+            except Exception as e:
+                print(f'保存视频失败: {e}')
+                raise

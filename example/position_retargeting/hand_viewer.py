@@ -186,6 +186,7 @@ class HandDatasetSAPIENViewer:
         vertex, joint = self.mano_layer(p, t)
         vertex = vertex.cpu().numpy()[0]
         joint = joint.cpu().numpy()[0]
+
         if not use_camera_frame:
             camera_mat = self.camera_pose.to_transformation_matrix()
             vertex = vertex @ camera_mat[:3, :3].T + camera_mat[:3, 3]

@@ -4,7 +4,7 @@ retargeting:
 
   target_joint_names: [
     # 前臂关节
-    "FAJ1", "FAJ3",
+    # "FAJ1", "FAJ3",
     # 食指关节
     "FFJ1", "FFJ2", "FFJ3", "FFJ4",
     # 小指关节

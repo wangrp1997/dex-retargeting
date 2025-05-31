@@ -26,7 +26,8 @@ def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: in
         viewer = HandDatasetSAPIENViewer(hand_type=hand_type, headless=False)
     else:
         viewer = RobotHandDatasetSAPIENViewer(
-            list(robots), HandType[hand_type], headless=False, fixed_joints_num=fixed_joints_num
+            list(robots), HandType[hand_type], headless=True, 
+            fixed_joints_num=fixed_joints_num
         )
 
     # Data ID, feel free to change it to visualize different trajectory
@@ -34,10 +35,10 @@ def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: in
     sampled_data = dataset[data_id]
 
     for key, value in sampled_data.items():
-        if "pose" not in key:
-            print(f"{key}: {value}")
+        # if "pose" not in key:
+        print(f"{key}: {value}")
     viewer.load_object_hand(sampled_data)
-    viewer.render_dexycb_data(sampled_data, fps)
+    viewer.render_dexycb_data(sampled_data, fps, data_id=data_id)
 
 
 def main(dexycb_dir: str,
