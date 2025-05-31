@@ -494,6 +494,7 @@ class DexPilotOptimizer(Optimizer):
 
         # Compute reference distance vector
         normal_vec = target_vector * self.scaling  # (10, 3)
+        # normal_vec = target_vector * self.scaling[:, None]  # 使用广播让每个向量分别乘以对应的缩放因子
         dir_vec = target_vector[:len_proj] / (target_vec_dist[:, None] + 1e-6)  # (6, 3) or (10, 3)
         projected_vec = dir_vec * self.projected_dist[:, None]  # (6, 3) or (10, 3)
 
@@ -532,9 +533,9 @@ class DexPilotOptimizer(Optimizer):
             # Loss term for kinematics retargeting based on 3D position error
             # Different from the original DexPilot, we use huber loss here instead of the squared dist
             vec_dist = torch.norm(robot_vec - torch_target_vec, dim=1, keepdim=False)
-            print("=== 向量距离检查 ===")
-            for i, (origin_name, task_name, dist) in enumerate(zip(self.origin_link_names, self.task_link_names, vec_dist)):
-                print(f"{origin_name} -> {task_name}: {dist.item():.4f}")
+            # print("=== 向量距离检查 ===")
+            # for i, (origin_name, task_name, dist) in enumerate(zip(self.origin_link_names, self.task_link_names, vec_dist)):
+            #     print(f"{origin_name} -> {task_name}: {dist.item():.4f}")
 
             huber_distance = (
                 self.huber_loss(vec_dist, torch.zeros_like(vec_dist))
@@ -544,7 +545,7 @@ class DexPilotOptimizer(Optimizer):
             huber_distance = huber_distance.sum()
 
             result = huber_distance.cpu().detach().item()
-            print("最终损失:", huber_distance)
+            # print("最终损失:", huber_distance)
             
             if grad.size > 0:
                 jacobians = []
@@ -948,6 +949,7 @@ class PositionPinchOptimizer(Optimizer):
         target_vec_dist = np.linalg.norm(target_vec[:len_proj], axis=1)
         
         # 更新投影状态
+        self.dexpilot_optimizer.project_dist = 0.02
         self.projected[:len_s1][target_vec_dist[0:len_s1] < self.dexpilot_optimizer.project_dist] = True
         self.projected[:len_s1][target_vec_dist[0:len_s1] > self.dexpilot_optimizer.escape_dist] = False
         self.projected[len_s1:len_proj] = np.logical_and(

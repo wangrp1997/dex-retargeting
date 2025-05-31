@@ -14,7 +14,8 @@ retargeting:
     # 无名指关节
     "RFJ1", "RFJ2", "RFJ3", "RFJ4",
     # 拇指关节
-    "THJ1", "THJ2", "THJ3", "THJ4"
+    "THJ1", "THJ2", "THJ3", "THJ4",
+    "LFJ5"
   ]
 
   target_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip",
