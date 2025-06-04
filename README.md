@@ -54,7 +54,7 @@ colcon build --packages-select dex_retargeting
 跑ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=position_pinch -p hand_type:=left -p resolution:=full -p headless:=false
 修改install/dex_retargeting/lib/dex_retargeting/retargeting_node的第一行为#!/home/rw/ros2_ws/venv/bin/python3
 
-根据报错对src中的包导入路径进行修改
+根据报错对src中的包导入路径进行修改install里面的导入要加上dex_retargeting.src.前缀
 pip 安装各种缺失的包
 sudo apt install ros-jazzy-pinocchio
 
