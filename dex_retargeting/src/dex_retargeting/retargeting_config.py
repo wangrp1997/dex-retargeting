@@ -8,7 +8,7 @@ import yaml
 import os
 
 from dex_retargeting.src.dex_retargeting import yourdfpy as urdf
-from dex_retargeting.kinematics_adaptor import MimicJointKinematicAdaptor
+from dex_retargeting.src.dex_retargeting.kinematics_adaptor import MimicJointKinematicAdaptor
 from dex_retargeting.optimizer_utils import LPFilter
 from dex_retargeting.robot_wrapper import RobotWrapper
 from dex_retargeting.seq_retarget import SeqRetargeting

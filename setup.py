@@ -10,7 +10,11 @@ venv_python = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 setup(
     name='dex_retargeting',
     version='0.5.0',
-    packages=find_packages(where='.', include=['dex_retargeting', 'dex_retargeting.src', 'dex_retargeting.src.dex_retargeting']),
+    packages=find_packages(where='.', include=[
+        'dex_retargeting',
+        'dex_retargeting.src',
+        'dex_retargeting.src.dex_retargeting',
+    ]),
     package_dir={'': '.'},
     package_data={
         'dex_retargeting': [

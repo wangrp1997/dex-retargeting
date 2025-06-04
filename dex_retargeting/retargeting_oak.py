@@ -273,14 +273,34 @@ class RetargetingNode(Node):
             indices = self.retargeting.optimizer.target_link_human_indices
 
             if retargeting_type == "POSITION":
+                indices = indices
                 ref_value = joint_pos[indices, :]
-            else:
+            elif retargeting_type == "DEXPILOT":
                 origin_indices = indices[0, :]
                 task_indices = indices[1, :]
                 ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+            elif retargeting_type == "HYBRID":
+                indices_vec = self.retargeting.optimizer.target_link_human_indices_vec
+                origin_indices = indices_vec[0, :]
+                task_indices = indices_vec[1, :]
+                ref_value = {
+                    "position": joint_pos[indices, :],
+                    "vector": joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                }
+            elif retargeting_type == "POSITION_PINCH":
+                # 和 hybrid 一样，需要同时提供位置和向量信息
+                indices_vec = self.retargeting.optimizer.target_link_human_indices_vec
+                origin_indices = indices_vec[0, :]
+                task_indices = indices_vec[1, :]
+                ref_value = {
+                    "target_pos": joint_pos[indices, :],  # 注意这里用 target_pos 而不是 position
+                    "target_vec": joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+                }
+            else:
+                raise ValueError(f"Unsupported retargeting type: {retargeting_type}")
                 
                 # 创建固定关节数组，长度为 2（对应 FAJ1 和 FAJ3）
-            fixed_qpos = np.zeros(2)  # 两个关节都设为 0
+            fixed_qpos = np.zeros(3)  # 3个关节都设为 0
             
             # 调用 retarget 时传入固定关节值
             qpos = self.retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
