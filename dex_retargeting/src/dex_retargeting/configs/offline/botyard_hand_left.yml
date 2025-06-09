@@ -24,25 +24,25 @@ retargeting:
     # 指尖关节
     "thtip", "fftip", "mftip", "rftip", "lftip",
     # # 远端关节
-    # "thdistal", "ffdistal", "mfdistal", "rfdistal", "lfdistal",
+    "thdistal", "ffdistal", "mfdistal", "rfdistal", "lfdistal",
     # # 中间关节
     "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle",
     # # 近端关节
-    # "thproximal", "ffproximal", "mfproximal", "rfproximal", "lfproximal"
+    "thproximal", "ffproximal", "mfproximal", "rfproximal", "lfproximal"
   ]
   # target_link_human_indices: [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18 ]
   target_link_human_indices: [
     # 指尖关节对应的人手关键点索引
     4, 8, 12, 16, 20,
     # # 远端关节对应的人手关键点索引
-    # 3, 7, 11, 15, 19,
+    3, 7, 11, 15, 19,
     # # 中间关节对应的人手关键点索引
     2, 6, 10, 14, 18,
     # # 近端关节对应的人手关键点索引
-    # 1, 5, 9, 13, 17
+    1, 5, 9, 13, 17
   ]
 
-  add_dummy_free_joint: True
+  add_dummy_free_joint: False
 
   # 优化参数
   # normal_delta: 0.1  # 增加关节角度约束权重

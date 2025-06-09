@@ -14,7 +14,7 @@ retargeting:
     # 无名指关节
     "RFJ1", "RFJ2", "RFJ3", "RFJ4",
     # 拇指关节
-    "THJ1", "THJ2", "THJ3", "THJ4", "THJ5"
+    "THJ1", "THJ2", "THJ3", "THJ4",
   ]
   # Target refers to the retargeting target, which is the robot hand
   wrist_link_name: "ee_link"
