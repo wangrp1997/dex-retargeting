@@ -166,6 +166,10 @@ class PositionOptimizer(Optimizer):
             huber_distance = self.huber_loss(torch_body_pos, torch_target_pos)
             result = huber_distance.cpu().detach().item()
 
+            distance = np.linalg.norm((torch_target_pos - torch_body_pos).detach().numpy(), axis=1)
+            avg_distance = distance.mean()
+            print(f"平均位置误差为：{avg_distance},huber位置误差为:{huber_distance}")
+            
             if grad.size > 0:
                 jacobians = []
                 for i, index in enumerate(self.target_link_indices):
@@ -179,7 +183,7 @@ class PositionOptimizer(Optimizer):
 
                 # Note: the joint order in this jacobian is consistent pinocchio
                 jacobians = np.stack(jacobians, axis=0)
-                huber_distance.backward()
+                huber_distance.backward()  # 使用Huber损失的梯度
                 grad_pos = torch_body_pos.grad.cpu().numpy()[:, None, :]
 
                 # Convert the jacobian from pinocchio order to target order
@@ -192,6 +196,7 @@ class PositionOptimizer(Optimizer):
                 grad_qpos = np.matmul(grad_pos, jacobians)
                 grad_qpos = grad_qpos.mean(1).sum(0)
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
+                # grad_qpos += 0.0004*(x)
 
                 grad[:] = grad_qpos[:]
 
@@ -948,6 +953,8 @@ class PositionPinchOptimizer(Optimizer):
         target_vec_dist = np.linalg.norm(target_vec[:len_proj], axis=1)
         
         # 更新投影状态
+        self.dexpilot_optimizer.project_dist = 0.02
+        # self.dexpilot_optimizer.escape_dist = 0.04
         self.projected[:len_s1][target_vec_dist[0:len_s1] < self.dexpilot_optimizer.project_dist] = True
         self.projected[:len_s1][target_vec_dist[0:len_s1] > self.dexpilot_optimizer.escape_dist] = False
         self.projected[len_s1:len_proj] = np.logical_and(
@@ -987,7 +994,6 @@ class PositionPinchOptimizer(Optimizer):
             if isinstance(ref_value, dict):
                 ref_value = ref_value["target_pos"]
             return self.position_optimizer.retarget(ref_value, fixed_qpos, last_qpos)
-
     def set_joint_limit(self, joint_limits: np.ndarray, epsilon=1e-3):
         """设置关节极限，并同步设置子优化器的关节极限"""
         # 先设置主优化器的关节极限
@@ -1003,3 +1009,4 @@ class PositionPinchOptimizer(Optimizer):
         print("主优化器关节极限:", self.opt.get_lower_bounds(), self.opt.get_upper_bounds())
         print("Position优化器关节极限:", self.position_optimizer.opt.get_lower_bounds(), self.position_optimizer.opt.get_upper_bounds())
         print("DexPilot优化器关节极限:", self.dexpilot_optimizer.opt.get_lower_bounds(), self.dexpilot_optimizer.opt.get_upper_bounds())
+

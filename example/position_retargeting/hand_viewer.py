@@ -41,7 +41,7 @@ def compute_smooth_shading_normal_np(vertices, indices):
 
 
 class HandDatasetSAPIENViewer:
-    def __init__(self, hand_type="right", headless=False, use_ray_tracing=False):
+    def __init__(self, hand_type="right", headless=True, use_ray_tracing=False):
         # Setup
         if not use_ray_tracing:
             sapien.render.set_viewer_shader_dir("default")
