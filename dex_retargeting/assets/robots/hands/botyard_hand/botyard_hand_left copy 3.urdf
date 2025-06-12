@@ -62,7 +62,7 @@
     <parent link="fabase"/>
     <child link="falink2"/>
     <axis xyz="1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.5235" upper="0.5235" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-1.5708" upper="1.5708" velocity="2.0"/>
   </joint>
   <link name="falink1">
     <inertial>
@@ -118,7 +118,7 @@
     <parent link="falink1"/>
     <child link="pmbase"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.2618" upper="0.5235" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-1.5708" upper="1.5708" velocity="2.0"/>
   </joint>
   <!-- define a joint connect to other part of robot -->
   <joint name="PALM" type="fixed">
@@ -176,7 +176,7 @@
     <parent link="palm"/>
     <child link="thbase"/>
     <axis xyz="1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.08" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
   </joint>
   <link name="thproximal">
     <inertial>
@@ -205,7 +205,7 @@
     <parent link="thbase"/>
     <child link="thproximal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="0.7854" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
   </joint>
   <link name="thmiddle">
     <inertial>
@@ -263,7 +263,7 @@
     <parent link="thmiddle"/>
     <child link="thdistal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.261799387799" upper="1.57079632679" velocity="2.0"/>
   </joint>
   <link name="thtip">
   </link>
@@ -329,7 +329,7 @@
     <parent link="ffbase"/>
     <child link="ffproximal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.261799387799" upper="1.57079632679" velocity="2.0"/>
   </joint>
   <link name="ffmiddle">
     <inertial>
@@ -424,7 +424,7 @@
     <parent link="palm"/>
     <child link="mfbase"/>
     <axis xyz="1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.2616" upper="0.2616" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.1309" upper="0.1309" velocity="2.0"/>
   </joint>
   <link name="mfproximal">
     <inertial>
@@ -453,7 +453,7 @@
     <parent link="mfbase"/>
     <child link="mfproximal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.261799387799" upper="1.57079632679" velocity="2.0"/>
   </joint>
   <link name="mfmiddle">
     <inertial>
@@ -548,7 +548,7 @@
     <parent link="palm"/>
     <child link="rfbase"/>
     <axis xyz="1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.2616" upper="0.2616" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.1309" upper="0.1309" velocity="2.0"/>
   </joint>
   <link name="rfproximal">
     <inertial>
@@ -577,7 +577,7 @@
     <parent link="rfbase"/>
     <child link="rfproximal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.261799387799" upper="1.57079632679" velocity="2.0"/>
   </joint>
   <link name="rfmiddle">
     <inertial>
@@ -672,7 +672,7 @@
     <parent link="palm"/>
     <child link="lfpalm"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="0" upper="0.785398163397" velocity="2.0"/>
   </joint>
   <link name="lfbase">
     <inertial>
@@ -701,7 +701,7 @@
     <parent link="lfpalm"/>
     <child link="lfbase"/>
     <axis xyz="1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="-0.2616" upper="0.2616" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="-0.1309" upper="0.1309" velocity="2.0"/>
   </joint>
   <link name="lfproximal">
     <inertial>
@@ -730,7 +730,7 @@
     <parent link="lfbase"/>
     <child link="lfproximal"/>
     <axis xyz="-1 0 0"/>
-    <limit acceleration="2.0" effort="0.1" lower="0.0" upper="1.5708" velocity="2.0"/>
+    <limit acceleration="2.0" effort="0.1" lower="0" upper="1.57079632679"  velocity="2.0"/>
   </joint>
   <link name="lfmiddle">
     <inertial>

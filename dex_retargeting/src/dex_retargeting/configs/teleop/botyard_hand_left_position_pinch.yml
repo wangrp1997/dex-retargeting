@@ -21,9 +21,9 @@ retargeting:
   # 用于位置优化的连杆
   target_link_names: [
     # 指尖关节
-    "thtip", "fftip", "mftip","rftip", "lftip",
+    "thdistal", "fftip", "mftip","rftip", "lftip",
     # # 远端关节
-    "thdistal", "ffdistal", "mfdistal", "rfdistal", "lfdistal",
+    # "thdistal", "ffdistal", "mfdistal", "rfdistal", "lfdistal",
     # # 中间关节
     "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle",
     # # 近端关节
@@ -33,9 +33,9 @@ retargeting:
   # 用于位置优化的人类关节索引
   target_link_human_indices: [
     # 指尖关节对应的人手关键点索引
-    4, 8, 12, 16, 20,
+    3, 8, 12, 16, 20,
     # # 远端关节对应的人手关键点索引
-    3, 7, 11, 15, 19,
+    # 3, 7, 11, 15, 19,
     # # 中间关节对应的人手关键点索引
     2, 6, 10, 14, 18,
     # # 近端关节对应的人手关键点索引
@@ -47,7 +47,7 @@ retargeting:
   finger_tip_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip" ]
 
   # 优化参数
-  scaling_factor: 1.3  # 使用与 dexpilot 相同的缩放因子
+  scaling_factor: 1.5  # 使用与 dexpilot 相同的缩放因子
   huber_delta_pos: 0.02  # 位置损失的 huber delta
   huber_delta_vec: 0.03  # 向量损失的 huber delta
 

@@ -59,6 +59,7 @@ pip 安装各种缺失的包
 sudo apt install ros-jazzy-pinocchio
 
 oak相机问题：
+需要接入3.0的接口
 lsusb | grep Movidius
 ls -l /dev/bus/usb/001/021(例子)
 需要出现类似的crw-rw-rw root plugdev ...才可以，否则运行下面的指令 重新插拔相机后再检查权限

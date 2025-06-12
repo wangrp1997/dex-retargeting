@@ -5,11 +5,11 @@ import nlopt
 import numpy as np
 import torch
 
-from dex_retargeting.kinematics_adaptor import (
+from dex_retargeting.src.dex_retargeting.kinematics_adaptor import (
     KinematicAdaptor,
     MimicJointKinematicAdaptor,
 )
-from dex_retargeting.robot_wrapper import RobotWrapper
+from dex_retargeting.src.dex_retargeting.robot_wrapper import RobotWrapper
 
 
 class Optimizer:
@@ -192,6 +192,9 @@ class PositionOptimizer(Optimizer):
                 grad_qpos = np.matmul(grad_pos, jacobians)
                 grad_qpos = grad_qpos.mean(1).sum(0)
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
+                # grad_qpos += 2 * self.norm_delta * ()
+                # distance = np.linalg.norm(torch_target_pos - torch_body_pos, axis=1)
+                # print("当前位置误差：",distance)
 
                 grad[:] = grad_qpos[:]
 
@@ -298,6 +301,7 @@ class VectorOptimizer(Optimizer):
                 grad_qpos = np.matmul(grad_pos, np.array(jacobians))
                 grad_qpos = grad_qpos.mean(1).sum(0)
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
+                grad_qpos += 0.0004*(x)
 
                 grad[:] = grad_qpos[:]
 
@@ -948,7 +952,7 @@ class PositionPinchOptimizer(Optimizer):
         target_vec_dist = np.linalg.norm(target_vec[:len_proj], axis=1)
         
         # 更新投影状态
-        self.dexpilot_optimizer.project_dist = 0.02
+        # self.dexpilot_optimizer.project_dist = 0.02
         self.projected[:len_s1][target_vec_dist[0:len_s1] < self.dexpilot_optimizer.project_dist] = True
         self.projected[:len_s1][target_vec_dist[0:len_s1] > self.dexpilot_optimizer.escape_dist] = False
         self.projected[len_s1:len_proj] = np.logical_and(
