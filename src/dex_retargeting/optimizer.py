@@ -345,7 +345,7 @@ class DexPilotOptimizer(Optimizer):
         huber_delta=0.03,
         norm_delta=4e-3,
         # DexPilot parameters
-        # gamma=2.5e-3,
+        gamma=2.5e-3,
         project_dist=0.03,
         escape_dist=0.05,
         eta1=1e-4,
@@ -383,6 +383,7 @@ class DexPilotOptimizer(Optimizer):
         self.escape_dist = escape_dist
         self.eta1 = eta1
         self.eta2 = eta2
+        self.gamma = gamma
 
         # Computation cache for better performance
         # For one link used in multiple vectors, e.g. hand palm, we do not want to compute it multiple times
@@ -579,7 +580,7 @@ class DexPilotOptimizer(Optimizer):
                 # which is equivalent to fully opened the hand
                 # In our implementation, we regularize the joint angles to the previous joint angles
                 grad_qpos += 2 * self.norm_delta * (x - last_qpos)
-
+                # grad_qpos += 2* self.gamma * (x)
                 grad[:] = grad_qpos[:]
 
             return result

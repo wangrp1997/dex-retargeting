@@ -201,23 +201,6 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
     
     print(f'创建了 {len(keypoint_spheres)} 个目标link球体')
 
-    # 添加一个测试球体，确保渲染正常工作
-    print('创建测试球体...')
-    test_material = sapien.render.RenderMaterial()
-    test_material.base_color = [1.0, 1.0, 1.0, 1.0]  # 白色
-    test_material.metallic = 0.0
-    test_material.roughness = 0.3
-    test_material.specular = 0.8
-    
-    test_builder = scene.create_actor_builder()
-    test_builder.add_sphere_visual(
-        radius=0.05,  # 5cm半径，很大
-        material=test_material
-    )
-    test_sphere = test_builder.build_static(name='test_sphere')
-    test_sphere.set_pose(sapien.Pose([0.3, 0, 0.2]))  # 在相机前方
-    print('测试球体创建完成，位置: [0.3, 0, 0.2]')
-
     while True:
         try:
             bgr = queue.get(timeout=5)
@@ -346,7 +329,6 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         # 添加调试信息
         if frame_count % 30 == 0:  # 每30帧打印一次调试信息
             print(f'=== 调试信息 (帧 {frame_count}) ===')
-            print(f'测试球体位置: {test_sphere.get_pose().p}')
             print(f'相机位置: {cam.get_local_pose().p}')
             print(f'目标link球体数量: {len(keypoint_spheres)}')
             
@@ -612,23 +594,6 @@ def main(
     
     print(f'创建了 {len(keypoint_spheres)} 个目标link球体')
 
-    # 添加一个测试球体，确保渲染正常工作
-    print('创建测试球体...')
-    test_material = sapien.render.RenderMaterial()
-    test_material.base_color = [1.0, 1.0, 1.0, 1.0]  # 白色
-    test_material.metallic = 0.0
-    test_material.roughness = 0.3
-    test_material.specular = 0.8
-    
-    test_builder = scene.create_actor_builder()
-    test_builder.add_sphere_visual(
-        radius=0.05,  # 5cm半径，很大
-        material=test_material
-    )
-    test_sphere = test_builder.build_static(name='test_sphere')
-    test_sphere.set_pose(sapien.Pose([0.3, 0, 0.2]))  # 在相机前方
-    print('测试球体创建完成，位置: [0.3, 0, 0.2]')
-
     try:
         # 初始化 OAK-D 相机
         print("正在初始化相机...")
@@ -721,7 +686,7 @@ def main(
                 if retargeting_type == "POSITION":
                     indices = indices
                     ref_value = joint_pos[indices, :]
-                elif retargeting_type == "DEXPILOT":
+                elif retargeting_type == "DEXPILOT" or retargeting_type == "VECTOR":
                     origin_indices = indices[0, :]
                     task_indices = indices[1, :]
                     ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
@@ -756,7 +721,6 @@ def main(
             # 添加调试信息
             if fps_counter % 30 == 0:  # 每30帧打印一次调试信息
                 print(f'=== 调试信息 (帧 {fps_counter}) ===')
-                print(f'测试球体位置: {test_sphere.get_pose().p}')
                 print(f'相机位置: {cam.get_local_pose().p}')
                 print(f'目标link球体数量: {len(keypoint_spheres)}')
                 
