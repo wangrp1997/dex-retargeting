@@ -24,7 +24,7 @@ retargeting:
   # Target refers to the retargeting target, which is the robot hand
   wrist_link_name: "pmbase"
   finger_tip_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip" ]
-  scaling_factor: 1.33
+  scaling_factor: 1.3
 
   # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
   low_pass_alpha: 0.2
