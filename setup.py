@@ -49,7 +49,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'retargeting_node = dex_retargeting.retargeting_oak:main',
+            'retargeting_node = dex_retargeting.retargeting_manus:main',
         ],
     },
     python_requires='>=3.7,<3.13',
