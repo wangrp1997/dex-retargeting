@@ -22,7 +22,7 @@ retargeting:
   # target_link_human_indices: [ 0, 1, 2, 3, 4 ]
 
   # Target refers to the retargeting target, which is the robot hand
-  wrist_link_name: "palm"
+  wrist_link_name: "pmbase"
   finger_tip_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip" ]
   scaling_factor: 1.33
 
