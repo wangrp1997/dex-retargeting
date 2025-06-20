@@ -86,7 +86,7 @@ ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p r
 oak:
 ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=position_pinch -p hand_type:=left -p resolution:=full -p headless:=false
 manus:
-ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p hand_type:=left -p headless:=true
+ros2 run dex_retargeting retargeting_node --ros-args -p robot_name:=botyard -p retargeting_type:=dexpilot -p hand_type:=left -p headless:=true
 ```
 
 ## Changelog
