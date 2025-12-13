@@ -26,7 +26,7 @@ def viz_hand_object(robots: Optional[Tuple[RobotName]], data_root: Path, fps: in
         viewer = HandDatasetSAPIENViewer(hand_type=hand_type, headless=False)
     else:
         viewer = RobotHandDatasetSAPIENViewer(
-            list(robots), HandType[hand_type], headless=True, 
+            list(robots), HandType[hand_type], headless=False, 
             fixed_joints_num=fixed_joints_num
         )
 
