@@ -16,17 +16,14 @@ retargeting:
     # 拇指关节
     "THJ1", "THJ2", "THJ3", "THJ4"
   ]
-  # target_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip",
-  #                      "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle" ]
-
 
   target_link_names: [ "thtip", "fftip", "mftip", "rftip", "lftip",
-                       "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle" ]
+                       "thmiddle", "ffmiddle", "mfmiddle", "rfmiddle", "lfmiddle",
+                       "thproximal", "ffproximal", "mfproximal", "rfproximal", "lfproximal" ]
 
-  target_link_human_indices: [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18 ]
+  target_link_human_indices: [ 4, 8, 12, 16, 20, 2, 6, 10, 14, 18, 1,5,9,13,17]
   add_dummy_free_joint: True
 
-  # 优化参数
-  # normal_delta: 0.1  # 增加关节角度约束权重
-  # huber_delta: 0.05  # 增加位置约束的平滑度
-  low_pass_alpha: 1  # 保持平滑滤波
+  # A smaller alpha means stronger filtering, i.e. more smooth but also larger latency
+  # 1 means no filter while 0 means not moving
+  low_pass_alpha: 0.5

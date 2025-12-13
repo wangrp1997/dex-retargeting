@@ -214,7 +214,7 @@ class RetargetingNode(Node):
     def glove_callback(self, msg: ManusGlove):
         # 只取raw_nodes，去除5、10、15、20索引
         indices = [i for i in range(len(msg.raw_nodes)) if i not in [5, 10, 15, 20]]
-        # 组装joint_pos为shape=(20,3)，每行为一个节点的xyz
+        # 组装joint_pos为shape=(21,3)，每行为一个节点的xyz
         joint_pos = np.zeros((len(indices), 3))
         for idx, node_idx in enumerate(indices):
             node = msg.raw_nodes[node_idx]
