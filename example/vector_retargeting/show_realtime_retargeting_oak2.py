@@ -1,3 +1,11 @@
+import sys
+# 调整 Python 路径，优先使用 conda 环境中的 pinocchio（Python 3.10），而不是 ROS 的版本（Python 3.12）
+# 将 conda 环境的路径移到前面，ROS 路径移到后面
+conda_paths = [p for p in sys.path if 'miniconda3' in p or 'conda' in p]
+ros_paths = [p for p in sys.path if 'ros' in p and 'site-packages' in p]
+other_paths = [p for p in sys.path if p not in conda_paths and p not in ros_paths]
+sys.path = conda_paths + other_paths + ros_paths
+
 import multiprocessing
 import time
 from pathlib import Path
@@ -447,7 +455,7 @@ def main(
                 else:
                     raise ValueError(f"Unsupported retargeting type: {retargeting_type}")
                 
-                fixed_qpos = np.zeros(3)
+                fixed_qpos = np.zeros(2)
                 qpos = retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
                 robot.set_qpos(qpos[retargeting_to_sapien])
             else:

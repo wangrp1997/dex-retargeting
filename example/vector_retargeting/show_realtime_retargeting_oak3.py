@@ -1,3 +1,37 @@
+import sys
+import os
+
+# 在导入任何库之前禁用 SteamVR/OpenVR
+# 修改 LD_LIBRARY_PATH，移除 SteamVR 相关路径
+if 'LD_LIBRARY_PATH' in os.environ:
+    ld_paths = os.environ['LD_LIBRARY_PATH'].split(':')
+    # 过滤掉所有包含 steam 或 SteamVR 的路径
+    filtered_paths = [p for p in ld_paths if 'steam' not in p.lower() and 'steamvr' not in p.lower()]
+    os.environ['LD_LIBRARY_PATH'] = ':'.join(filtered_paths)
+
+# 设置环境变量禁用 OpenVR/SteamVR
+# VR_OVERRIDE 设置为不存在的路径，阻止 SAPIEN 初始化 VR
+os.environ['VR_OVERRIDE'] = '/dev/null'
+os.environ['OPENVR_INIT'] = '0'
+os.environ['STEAMVR_INIT'] = '0'
+os.environ['DISABLE_STEAMVR'] = '1'
+os.environ['OPENVR_DISABLE'] = '1'
+# 禁用 SAPIEN 的 VR 支持
+os.environ['SAPIEN_DISABLE_VR'] = '1'
+
+# 重定向 stderr 来隐藏 SteamVR 的日志（可选，如果需要看到其他错误可以注释掉）
+# import contextlib
+# stderr_fd = os.dup(2)  # 保存原始 stderr
+# devnull = os.open(os.devnull, os.O_WRONLY)
+# os.dup2(devnull, 2)  # 重定向 stderr 到 /dev/null
+
+# 调整 Python 路径，优先使用 conda 环境中的 pinocchio 而不是 ROS 的版本
+# 将 conda 环境的路径移到前面，ROS 路径移到后面
+conda_paths = [p for p in sys.path if 'miniconda3' in p or 'conda' in p]
+ros_paths = [p for p in sys.path if 'ros' in p and 'site-packages' in p]
+other_paths = [p for p in sys.path if p not in conda_paths and p not in ros_paths]
+sys.path = conda_paths + other_paths + ros_paths
+
 import multiprocessing
 import time
 from pathlib import Path
@@ -709,7 +743,7 @@ def main(
                 else:
                     raise ValueError(f"Unsupported retargeting type: {retargeting_type}")
                 
-                fixed_qpos = np.zeros(3)
+                fixed_qpos = np.zeros(2)
                 qpos = retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
                 robot.set_qpos(qpos[retargeting_to_sapien])
             else:
