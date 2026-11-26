@@ -102,6 +102,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
     interval = 1.0 / fps if is_video and np.isfinite(fps) and fps > 0 else 0.0
     landmark_filter = LandmarkFilter(smoothing)
     botyard = objective_name == "botyard"
+    show_mano = botyard
     calibration = FingerRootCalibration(solver.optimizer.robot) if show_camera and not botyard else None
     last_frame = monotonic() - 1 / 30
     frames = tracked = 0
@@ -153,6 +154,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         publisher.publish(message)
         if show_camera:
             lines = []
+            mesh_visible = tracking and show_mano and retargeter.mano.draw_overlay(frame)
             if tracking:
                 detector.draw_skeleton_on_image(frame, landmarks, style="default")
                 pair = monitor.first_intersection(q) if monitor is not None else None
@@ -172,8 +174,12 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             lines.append((status, 28))
             if calibration is not None:
                 lines.append((calibration.prompt(), frame.shape[0] - 16))
-            elif tracked:
-                lines.append((f"Botyard | MANO + solve {1000 * solve_seconds / tracked:.0f} ms avg", frame.shape[0] - 16))
+            elif botyard:
+                mesh_status = "off" if not show_mano else ("visible" if mesh_visible else "waiting")
+                label = f"M: MANO mesh {mesh_status}"
+                if tracked:
+                    label += f" | MANO + solve {1000 * solve_seconds / tracked:.0f} ms avg"
+                lines.append((label, frame.shape[0] - 16))
             for label, y in lines:
                 for color, width in [((0, 0, 0), 3), ((255, 255, 255), 1)]:
                     cv2.putText(frame, label, (12, y), cv2.FONT_HERSHEY_SIMPLEX,
@@ -182,7 +188,9 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             key = cv2.waitKey(1) & 0xff
             if key in (27, ord("q")):
                 break
-            if key == ord("c") and calibration is not None:
+            if key in (ord("m"), ord("M")) and botyard:
+                show_mano = not show_mano
+            elif key == ord("c") and calibration is not None:
                 calibration.start()
             elif key == ord("b") and calibration is not None:
                 calibration.toggle()

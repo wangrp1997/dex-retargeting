@@ -1,6 +1,7 @@
 """Causal MANO fitting and the Botyard two-stage GS S1 objective."""
 from pathlib import Path
 
+import cv2
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
@@ -36,6 +37,7 @@ class OnlineMano:
         self.perturbations = np.vstack((np.zeros(45), 1e-5 * np.eye(45)))
         self.scale_filter = LandmarkFilter('one_euro')
         self.last_time = None
+        self.preview_mesh = None
 
     def skin(self, poses, root, geometry):
         """Batched, wrist-centred MANO forward kinematics and linear blend skinning."""
@@ -96,7 +98,39 @@ class OnlineMano:
         self.pose = result.x
         self.last_time = timestamp
         joints, vertices = self.skin(self.pose[None], root, self.mesh)
-        return scale * np.concatenate((joints[0], vertices[0, TIPS]))[ORDER], scale * vertices[0]
+        landmarks = scale * np.concatenate((joints[0], vertices[0, TIPS]))[ORDER]
+        vertices = scale * vertices[0]
+        self.preview_mesh = (vertices, translation) if translation[2] > .08 else None
+        return landmarks, vertices
+
+    def draw_overlay(self, image):
+        """Project the current fit using the same camera model as the 2D residual."""
+        if self.preview_mesh is None:
+            return False
+        vertices, translation = self.preview_mesh
+        camera = vertices + translation
+        if not np.isfinite(camera).all() or camera[:, 2].min() <= 0:
+            return False
+        height, width = image.shape[:2]
+        size = np.array([width, height])
+        pixels = max(width, height) * camera[:, :2] / camera[:, 2:] + size / 2
+        lo = np.clip(np.floor(pixels.min(axis=0)) - 1, 0, size).astype(int)
+        hi = np.clip(np.ceil(pixels.max(axis=0)) + 2, 0, size).astype(int)
+        if np.any(hi <= lo):
+            return False
+        roi = image[lo[1]:hi[1], lo[0]:hi[0]]
+        layer = roi.copy()
+        triangles = np.rint(pixels - lo).astype(np.int32)[self.faces]
+        a, b, c = camera[self.faces].transpose(1, 0, 2)
+        normals = np.cross(b - a, c - a)
+        normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-10)
+        light = np.clip(normals @ [-.30, -.43, -.85], 0, 1)
+        colors = ((.55 + .45 * light[:, None]) * [225, 210, 55]).astype(np.uint8).tolist()
+        # Paint near fingers last so their surface remains visible during opposition.
+        for i in np.argsort(a[:, 2] + b[:, 2] + c[:, 2])[::-1]:
+            cv2.fillConvexPoly(layer, triangles[i], colors[i], lineType=cv2.LINE_AA)
+        cv2.addWeighted(layer, .48, roi, .52, 0, dst=roi)
+        return True
 
 
 class BotyardRetargeter:
