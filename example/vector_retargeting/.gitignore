@@ -12,5 +12,26 @@
 /data/gs_s1_hand_baselines/**/*.png
 /data/gs_s1_hand_baselines/**/per_frame.csv
 /data/gs_s1_hand_baselines/**/solver_diagnostics.csv
-/data/gs_s1_hand_baselines/example_rgb_mano/contact_review/逐帧表面间隙.csv
 /data/gs_s1_hand_baselines/example_rgb_mano/*/w*_base*.json
+
+# Local GS S1 baseline experiments and their reports
+/data/gs_s1_dexmv_mustard.json
+/data/gs_s1_objective_comparison.json
+/data/gs_s1_hand_baselines/README.md
+/data/gs_s1_hand_baselines/dexpilot_finger_shape.csv
+/data/gs_s1_hand_baselines/learned_examples/
+/data/gs_s1_hand_baselines/palm_anchor_ablation/
+/data/gs_s1_hand_baselines/run_learned_examples.py
+/data/gs_s1_hand_baselines/scores.json
+/data/gs_s1_hand_baselines/thumb.csv
+/data/gs_s1_hand_baselines/thumb_frame88_bound.py
+/data/gs_s1_hand_baselines/thumb_reachability.csv
+/data/gs_s1_hand_baselines/thumb_reachability.py
+
+# Intermediate runs for the example RGB recording
+/data/gs_s1_hand_baselines/example_rgb_mano/contact_review/
+/data/gs_s1_hand_baselines/example_rgb_mano/metrics.json
+/data/gs_s1_hand_baselines/example_rgb_mano/revised/
+/data/gs_s1_hand_baselines/example_rgb_mano/v3/metrics.json
+/data/gs_s1_hand_baselines/example_rgb_mano/v3_1/
+/data/gs_s1_hand_baselines/example_rgb_mano/v3_weight_sweep/
