@@ -34,6 +34,12 @@
   <img src="example/vector_retargeting/teaser.webp" alt="Retargeting with different hands.">
 </div>
 
+## Botyard Retargeting v3.3
+
+This branch retargets reconstructed MANO right-hand motion to the Botyard GS S1. The offline optimizer tracks finger curl, pad orientation and thumb-to-finger surface gaps. The four passive distal joints follow their respective middle joints. The DexMV mustard-bottle trial reproduced early thumb contact and failed to lift the free bottle.
+
+[RGB example and v3.3 settings](example/vector_retargeting/data/gs_s1_hand_baselines/example_rgb_mano/README.md) · [DexMV replay and results](example/vector_retargeting/data/gs_s1_hand_baselines/mustard_v32_v33/README.md)
+
 ## Installation
 
 ```shell

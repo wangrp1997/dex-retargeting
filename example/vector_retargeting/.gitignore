@@ -1,4 +1,16 @@
-# Examples
-/example/vector_retargeting/data/
-!example/vector_retargeting/data/human_hand_video.mp4
-!example/vector_retargeting/data/realtime_example.webp
+# Upstream example clip used by the RGB benchmark
+!/data/human_hand_video.mp4
+
+# Generated trajectories, model exports, recordings, and per-frame diagnostics
+/data/**/*.npz
+/data/**/*.npy
+/data/**/*.pkl
+/data/**/*.pt
+/data/**/*.pth
+/data/**/*.bag
+/data/**/*.mcap
+/data/gs_s1_hand_baselines/**/*.png
+/data/gs_s1_hand_baselines/**/per_frame.csv
+/data/gs_s1_hand_baselines/**/solver_diagnostics.csv
+/data/gs_s1_hand_baselines/example_rgb_mano/contact_review/逐帧表面间隙.csv
+/data/gs_s1_hand_baselines/example_rgb_mano/*/w*_base*.json

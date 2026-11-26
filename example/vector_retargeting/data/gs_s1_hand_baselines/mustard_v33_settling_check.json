@@ -1,0 +1,66 @@
+{
+  "sequence": "DexMV relocate_mustard_example_seq",
+  "method": "GS S1 right / v3.3",
+  "fps": 25,
+  "setup": "1 s under gravity with the hand at its initial pose. Preserve the annotated horizontal position and heading after settling. Use multi-point collision detection during settling and replay. The bottle is free for the entire recorded trajectory.",
+  "first_distal_contact_digit": "thumb",
+  "mano_thumb_distal_gap_at_first_sampled_contact_mm": 34.376307856647074,
+  "baseline": {
+    "first_frame": 11,
+    "first_contact": 52,
+    "first_over_45_deg": 60,
+    "initial_xyz_mm": [
+      0.0,
+      0.0,
+      85.6936593109923
+    ],
+    "initial_relative_xy_mm": 0.0,
+    "initial_tilt_deg": 2.123132425505663,
+    "drift_before_touch_mm": 4.802211760058569,
+    "tilt_frame60_deg": 52.67716059110123,
+    "max_horizontal_drift_mm": 119.09115241721491,
+    "peak_bottom_clearance_mm": 2.9962997165964844,
+    "human_lift_frames": 24,
+    "hand_contact_in_human_lift_frames": 0
+  },
+  "settled": {
+    "first_frame": 11,
+    "first_contact": 53,
+    "first_over_45_deg": 61,
+    "initial_xyz_mm": [
+      0.0,
+      0.0,
+      87.78887634623021
+    ],
+    "initial_relative_xy_mm": 0.0,
+    "initial_tilt_deg": 0.027429199987452812,
+    "drift_before_touch_mm": 0.0024897928936405043,
+    "tilt_frame60_deg": 42.59190153074223,
+    "max_horizontal_drift_mm": 121.18184763336865,
+    "peak_bottom_clearance_mm": 3.0063114423196855,
+    "human_lift_frames": 24,
+    "hand_contact_in_human_lift_frames": 0,
+    "stable_grasp": false,
+    "hand_object_peak_penetration_mm": 11.197370923410107
+  },
+  "settled_no_hand_contact": {
+    "first_frame": 11,
+    "first_contact": null,
+    "first_over_45_deg": null,
+    "initial_xyz_mm": [
+      0.0,
+      0.0,
+      87.78887634623021
+    ],
+    "initial_relative_xy_mm": 0.0,
+    "initial_tilt_deg": 0.027429199987452812,
+    "drift_before_touch_mm": 0.002805926659259916,
+    "tilt_frame60_deg": 0.026960256345643748,
+    "max_horizontal_drift_mm": 0.002805926659259916,
+    "peak_bottom_clearance_mm": 2.958646895621822,
+    "human_lift_frames": 24,
+    "hand_contact_in_human_lift_frames": 0,
+    "stable_grasp": false,
+    "hand_object_peak_penetration_mm": 0.0
+  }
+}
