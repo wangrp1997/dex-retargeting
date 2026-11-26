@@ -32,6 +32,12 @@ def start_preview(context):
                        "--assets", LaunchConfiguration("mujoco_assets"),
                        "--wuji-root", LaunchConfiguration("wuji_root"),
                        "--tsinghua-root", LaunchConfiguration("tsinghua_root")])
+    tracker_env = {"PYTHONPATH": os.pathsep.join([str(src), os.environ.get("PYTHONPATH", "")])}
+    if LaunchConfiguration("objective").perform(context) == "botyard":
+        tracker_env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
+        mano_model = LaunchConfiguration("mano_model").perform(context)
+        if mano_model:
+            input_args.extend(["--mano-model", mano_model])
     if not IfCondition(LaunchConfiguration("show_camera")).evaluate(context):
         input_args.append("--no-camera-window")
     if backend == "mujoco":
@@ -58,7 +64,7 @@ def start_preview(context):
         )
     tracker = ExecuteProcess(
         cmd=[LaunchConfiguration("tracker_python"), str(example / "gs_s1_rviz.py"), *input_args],
-        additional_env={"PYTHONPATH": os.pathsep.join([str(src), os.environ.get("PYTHONPATH", "")])},
+        additional_env=tracker_env,
         output="screen",
         on_exit=[EmitEvent(event=Shutdown(reason="Camera or video stream finished"))],
     )
@@ -72,10 +78,11 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("backend", default_value="rviz", choices=["rviz", "mujoco"]),
         DeclareLaunchArgument("hand", default_value="right", choices=["right", "left"]),
-        DeclareLaunchArgument("objective", default_value="dexpilot", choices=["dexpilot", "wuji", "vector", "tsinghua"]),
+        DeclareLaunchArgument("objective", default_value="dexpilot", choices=["dexpilot", "wuji", "vector", "tsinghua", "botyard"]),
         DeclareLaunchArgument("smoothing", default_value="one_euro", choices=["one_euro", "off"]),
         DeclareLaunchArgument("wuji_root", default_value=str(projects / "wuji-retargeting")),
         DeclareLaunchArgument("tsinghua_root", default_value=str(projects / "tsinghua-retargeting")),
+        DeclareLaunchArgument("mano_model", default_value="", description="Optional prepared MANO NPZ for the selected hand"),
         DeclareLaunchArgument("camera", default_value="0"),
         DeclareLaunchArgument("video", default_value=""),
         DeclareLaunchArgument("tracker_python", default_value=(

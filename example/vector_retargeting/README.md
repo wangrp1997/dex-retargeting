@@ -10,16 +10,28 @@ From the repository root on the Botyard laptop, source ROS 2 and the workspace, 
 source /opt/ros/humble/setup.zsh
 source ~/botyard_ws/install/setup.zsh
 ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
-  backend:=mujoco hand:=right objective:=dexpilot camera:=0
+  backend:=mujoco hand:=right objective:=botyard camera:=0
 ```
 
-Use `backend:=rviz|mujoco`, `hand:=right|left` and `objective:=dexpilot|wuji|vector|tsinghua` (one value per argument).
+Use `backend:=rviz|mujoco`, `hand:=right|left` and `objective:=botyard|dexpilot|wuji|vector|tsinghua` (one value per argument).
 The defaults are `rviz`, `right` and `dexpilot`. Use `video:=/path/to/video.mp4` to replay the same input.
-All four objectives apply One Euro smoothing to the wrist-local 3D landmarks before optimization.
+The four landmark objectives apply One Euro smoothing to the wrist-local 3D landmarks before optimization.
 Use `smoothing:=one_euro` (default) or `smoothing:=off` to compare them on the same video.
 The camera overlay shows the original 2D detections. Press **q** in that window to stop.
 
-To calibrate the four finger chains, hold the fingers straight and together,
+The **Botyard** objective fits the selected MANO hand to each frame's 3D detections and 2D image points using the previous pose. It uses the template shape and estimates palm scale online. The offline RGB benchmark fits shape and pose jointly across the full recording. The live optimizer uses the same two robot objectives, joint limits, passive couplings and mesh checks as the offline benchmark. One Euro filtering covers the fitted landmarks, pad centres, pad normals and distal surface gaps. The camera window shows the observed skeleton and mean MANO-plus-solver time. Both backends receive the same joint commands.
+
+The tracker loads a prepared model from `~/.cache/botyard-retargeting/mano/right.npz` or `left.npz` according to `hand`. Both are prepared on the development laptop. On a new machine, run the following once with licensed MANO data and a Python environment that can read the original chumpy pickle. Use `mano_model:=/path/to/model.npz` to override the selected path.
+
+```zsh
+mkdir -p -m 700 ~/.cache/botyard-retargeting/mano
+for side in right left; do
+  ~/miniconda3/envs/grabnet/bin/python example/vector_retargeting/data/gs_s1_hand_baselines/fit_example_mano.py prepare \
+    "$HOME/Downloads/mano_v1_2/models/MANO_${(U)side}.pkl" "$HOME/.cache/botyard-retargeting/mano/$side.npz"
+done
+```
+
+For the four landmark objectives, to calibrate the finger chains, hold the fingers straight and together,
 focus the camera window and press **c**. Hold the pose until the window reads
 **Finger calibration ON** (20 consecutive detections). Press **b** to compare with the
 original mapping, or **c** to repeat. Calibration applies to the selected hand for this

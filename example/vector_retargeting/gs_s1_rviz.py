@@ -1,6 +1,7 @@
 """Publish webcam retargeting targets for the selected Botyard GS S1 hand."""
 
 import argparse
+import sys
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -90,7 +91,7 @@ def build_constrained(solver, model, method, args):
 
 
 def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_camera, hand,
-           smoothing="one_euro"):
+           smoothing, objective_name):
     publisher = node.create_publisher(JointState, "joint_states", 10)
     message = JointState()
     message.name = WRIST_JOINTS + FINGER_JOINTS  # robot_state_publisher expands mimic joints
@@ -100,14 +101,14 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
     fps = capture.get(cv2.CAP_PROP_FPS)
     interval = 1.0 / fps if is_video and np.isfinite(fps) and fps > 0 else 0.0
     landmark_filter = LandmarkFilter(smoothing)
-    calibration = FingerRootCalibration(solver.optimizer.robot) if show_camera else None
+    botyard = objective_name == "botyard"
+    calibration = FingerRootCalibration(solver.optimizer.robot) if show_camera and not botyard else None
     last_frame = monotonic() - 1 / 30
     frames = tracked = 0
     previous_tracking = None
-    objective_name = "Wuji" if retargeter.wuji is not None else solver.optimizer.retargeting_type
-    if retargeter.tsinghua is not None:
-        objective_name = "Tsinghua"
-    window_title = f"GS S1 - {hand} - {objective_name}"
+    display_name = {"dexpilot": "DexPilot", "wuji": "Wuji", "botyard": "Botyard"}.get(objective_name, objective_name.title())
+    window_title = f"GS S1 - {hand} - {display_name}"
+    solve_seconds = 0.
     while rclpy.ok():
         start = monotonic()
         ok, frame = capture.read()
@@ -120,16 +121,26 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         dt = interval or min(capture_time - last_frame, .1)
         last_frame = capture_time
         frames += 1
-        _, points, landmarks, _ = detector.detect(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        _, points, landmarks, wrist_axes = detector.detect(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         tracking = points is not None and np.isfinite(points).all()
+        if botyard and tracking:
+            pixels = detector.parse_keypoint_2d(landmarks, frame.shape)
+            tracking = (np.isfinite(wrist_axes).all() and np.isfinite(pixels).all()
+                        and np.linalg.norm(np.cross(points[5] - points[0], points[9] - points[0])) > 1e-8)
         local_points = points @ MANO_TO_GS_S1 if tracking else None
         if calibration is not None:
             calibration.observe(local_points)
         status = f"Waiting for {hand} hand"
         if tracking:
             target = landmark_filter.update(local_points, timestamp)
-            aligned = calibration.apply(target) if calibration is not None else target
-            q = retargeter.solve(target, dt, aligned_points=aligned)
+            solve_start = monotonic()
+            if botyard:
+                camera_points = points @ detector.operator2mano.T @ wrist_axes.T
+                q = retargeter.solve_camera(camera_points, pixels, frame.shape[1::-1], timestamp, dt)
+            else:
+                aligned = calibration.apply(target) if calibration is not None else target
+                q = retargeter.solve(target, dt, aligned_points=aligned)
+            solve_seconds += monotonic() - solve_start
             if not np.isfinite(q).all():
                 raise ValueError("Non-finite retargeted joint position")
             message.position = q[indices].tolist()
@@ -154,11 +165,15 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
                               f"{np.degrees(q[pinky_j2]):.0f} deg", 52))
                 gaps = np.linalg.norm(target[8::4] - target[4], axis=1) * 1000
                 gap_text = " ".join(f"{name} {gap:.0f}" for name, gap in zip("IMRL", gaps))
-                if objective_name == "DEXPILOT":
+                if objective_name == "dexpilot":
                     active = [name for name, on in zip("IMRL", solver.optimizer.projected[:4]) if on]
                     gap_text += " | projected: " + (",".join(active) or "-")
                 lines.append(("Thumb gaps mm: " + gap_text, 76))
-            lines.extend([(status, 28), (calibration.prompt(), frame.shape[0] - 16)])
+            lines.append((status, 28))
+            if calibration is not None:
+                lines.append((calibration.prompt(), frame.shape[0] - 16))
+            elif tracked:
+                lines.append((f"Botyard | MANO + solve {1000 * solve_seconds / tracked:.0f} ms avg", frame.shape[0] - 16))
             for label, y in lines:
                 for color, width in [((0, 0, 0), 3), ((255, 255, 255), 1)]:
                     cv2.putText(frame, label, (12, y), cv2.FONT_HERSHEY_SIMPLEX,
@@ -167,13 +182,15 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             key = cv2.waitKey(1) & 0xff
             if key in (27, ord("q")):
                 break
-            if key == ord("c"):
+            if key == ord("c") and calibration is not None:
                 calibration.start()
-            elif key == ord("b"):
+            elif key == ord("b") and calibration is not None:
                 calibration.toggle()
         if interval:
             sleep(max(0.0, interval - (monotonic() - start)))
     node.get_logger().info(f"Tracked {hand} hand in {tracked}/{frames} frames")
+    if botyard and tracked:
+        node.get_logger().info(f"Botyard MANO + solve mean {1000 * solve_seconds / tracked:.1f} ms/frame")
     if is_video and rclpy.ok() and not tracked:
         raise RuntimeError(f"No {hand} hand detected in the video.")
 
@@ -182,11 +199,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hand", choices=("right", "left"), default="right")
     projects = Path(__file__).resolve().parents[3]
-    parser.add_argument("--objective", choices=OBJECTIVES, default="dexpilot")
+    parser.add_argument("--objective", choices=(*OBJECTIVES, "botyard"), default="dexpilot")
     parser.add_argument("--smoothing", choices=("one_euro", "off"), default="one_euro")
     parser.add_argument("--assets", type=Path, default=projects / "tendon-spin/assets")
     parser.add_argument("--wuji-root", type=Path, default=projects / "wuji-retargeting")
     parser.add_argument("--tsinghua-root", type=Path, default=projects / "tsinghua-retargeting")
+    parser.add_argument("--mano-model", type=Path, help="Prepared MANO NPZ for the selected hand")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--camera", type=int, default=0, help="OpenCV camera index (default: 0)")
     source.add_argument("--video", type=Path, help="Replay an MP4 instead of using the camera")
@@ -198,11 +216,19 @@ def main():
                                   hand=args.hand, objective=args.objective)
     mesh_dir = Path(get_package_share_directory("dexhand_description")) / "meshes/gs_s1"
     model = load_hand(args.assets, mesh_dir, args.hand)
-    retargeter = build_constrained(solver, model, args.objective, args)
+    if args.objective == "botyard":
+        # Import the same two objectives as the offline benchmark, only when selected.
+        sys.path.append(str(Path(__file__).resolve().parent / "data/gs_s1_hand_baselines"))
+        from botyard_live import BotyardRetargeter
+        retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing)
+    else:
+        retargeter = build_constrained(solver, model, args.objective, args)
     device = str(args.video) if args.video else args.camera
     with ExitStack() as cleanup:
         capture = cv2.VideoCapture(device)
         cleanup.callback(capture.release)
+        if args.video is None:
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if show_camera:
             cleanup.callback(cv2.destroyAllWindows)
         if not capture.isOpened():
@@ -217,7 +243,7 @@ def main():
         cleanup.callback(node.destroy_node)
         try:
             stream(node, capture, solver, retargeter, monitor, detector, args.video is not None,
-                   show_camera, args.hand, args.smoothing)
+                   show_camera, args.hand, args.smoothing, args.objective)
         except KeyboardInterrupt:
             pass
 

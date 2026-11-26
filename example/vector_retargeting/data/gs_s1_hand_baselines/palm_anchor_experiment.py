@@ -44,12 +44,13 @@ def surface_targets(surface, track):
     return center, normal, lower
 
 
-def cad_patches(mesh_dir):
+def cad_patches(mesh_dir, side='right'):
     dtype = [('normal', '<f4', 3), ('vertices', '<f4', (3, 3)), ('attribute', '<u2')]
     centers, normals = [], []
     for finger in DIGITS:
-        sign = -1 if finger == 'th' else 1
-        path = mesh_dir / ('rh' if finger == 'th' else '') / (finger+'distal.STL')
+        right_thumb = finger == 'th' and side == 'right'
+        sign = -1 if right_thumb else 1
+        path = mesh_dir / ('rh' if right_thumb else '') / (finger+'distal.STL')
         faces = np.fromfile(path, dtype=dtype, offset=84)
         a, b, c = faces['vertices'].astype(float).transpose(1, 0, 2)
         ab, ac = b-a, c-a
@@ -81,7 +82,7 @@ def finger_shape(chain):
 
 
 class Hand:
-    def __init__(self, solver, mesh_dir):
+    def __init__(self, solver, mesh_dir, side='right'):
         model = solver.geom.model
         self.model = model
         self.data = mj.MjData(model)
@@ -91,7 +92,7 @@ class Hand:
         palm = model.body('palm').id
         self.wrist = self.data.xpos[palm].copy()
         self.axes = self.data.xmat[palm].reshape(3,3).copy()
-        self.centers, self.normals = cad_patches(mesh_dir)
+        self.centers, self.normals = cad_patches(mesh_dir, side)
 
     def states(self, controls):
         # Perturb the independent actuators only. The same compiled coupling
