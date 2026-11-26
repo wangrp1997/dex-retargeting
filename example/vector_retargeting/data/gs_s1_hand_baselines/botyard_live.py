@@ -134,7 +134,8 @@ class OnlineMano:
 
 
 class BotyardRetargeter:
-    def __init__(self, solver, model, meshes, side, template, smoothing):
+    def __init__(self, solver, model, meshes, side, template, smoothing, *, gradient="finite_difference"):
+        self.gradient = gradient
         self.mano = OnlineMano(template or Path.home() / '.cache/botyard-retargeting/mano' / f'{side}.npz')
         self.frame_transform = (OPERATOR2MANO_RIGHT if side == 'right' else OPERATOR2MANO_LEFT) @ MANO_TO_GS_S1
         self.reference = ConstrainedRetargeter(solver, model)
@@ -161,7 +162,7 @@ class BotyardRetargeter:
             self.filters, (local, pads[0], normals[0], gaps[:, None]))]
         prev_ref = self.reference.last.copy()
         shape = objective(self.hand, chain[1:].reshape(5, 4, 3), pads, unit(normals), prev_ref,
-                          weight=0., opposition=True)
+                          weight=0., opposition=True, gradient=self.gradient)
         self.reference.solve_objective(shape, dt)
         reference = self.reference.last
         human_width = np.linalg.norm(local[5] - local[17])

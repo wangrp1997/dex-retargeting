@@ -208,6 +208,8 @@ def main():
     parser.add_argument("--hand", choices=("right", "left"), default="right")
     projects = Path(__file__).resolve().parents[3]
     parser.add_argument("--objective", choices=(*OBJECTIVES, "botyard"), default="dexpilot")
+    parser.add_argument("--botyard-gradient", choices=("finite_difference", "analytic"), default="finite_difference",
+                        help="Gradient of the first-stage Botyard hand-shape objective")
     parser.add_argument("--smoothing", choices=("one_euro", "off"), default="one_euro")
     parser.add_argument("--assets", type=Path, default=projects / "tendon-spin/assets")
     parser.add_argument("--wuji-root", type=Path, default=projects / "wuji-retargeting")
@@ -228,7 +230,8 @@ def main():
         # Import the same two objectives as the offline benchmark, only when selected.
         sys.path.append(str(Path(__file__).resolve().parent / "data/gs_s1_hand_baselines"))
         from botyard_live import BotyardRetargeter
-        retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing)
+        retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
+                                       gradient=args.botyard_gradient)
     else:
         retargeter = build_constrained(solver, model, args.objective, args)
     device = str(args.video) if args.video else args.camera

@@ -21,6 +21,8 @@ The camera overlay shows the original 2D detections. Press **q** in that window 
 
 The **Botyard** objective fits the selected MANO hand to each frame's 3D detections and 2D image points using the previous pose. It uses the template shape and estimates palm scale online. The offline RGB benchmark fits shape and pose jointly across the full recording. The live optimizer uses the same two robot objectives, joint limits, passive couplings and mesh checks as the offline benchmark. One Euro filtering covers the fitted landmarks, pad centres, pad normals and distal surface gaps. The camera window overlays the translucent cyan MANO surface from the current fit under the MediaPipe skeleton. Press **M** in the camera window to hide or show the surface while retargeting continues. The bottom line shows mesh visibility and mean MANO-plus-solver time. Both backends receive the same joint commands.
 
+Use `botyard_gradient:=analytic` to test the analytical first-stage gradient with either backend. The default `botyard_gradient:=finite_difference` selects the reference solver.
+
 The tracker loads a prepared model from `~/.cache/botyard-retargeting/mano/right.npz` or `left.npz` according to `hand`. Both are prepared on the development laptop. On a new machine, run the following once with licensed MANO data and a Python environment that can read the original chumpy pickle. Use `mano_model:=/path/to/model.npz` to override the selected path.
 
 ```zsh

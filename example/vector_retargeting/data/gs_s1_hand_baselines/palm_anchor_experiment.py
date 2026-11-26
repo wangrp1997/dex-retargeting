@@ -22,6 +22,7 @@ PAD_VERTEX = (763, 343, 455, 566, 683)
 WEAK_WEIGHT = .1
 LENGTH = .010
 ANGLE = np.deg2rad(20.)
+JOINT_MOTION_WEIGHT = .03
 
 
 def surface_targets(surface, track):
@@ -74,10 +75,19 @@ def cad_patches(mesh_dir, side='right'):
     return np.array(centers), np.array(normals)
 
 
-def finger_shape(chain):
-    bones = unit(np.diff(chain, axis=-2))
+def bone_geometry(chain):
+    segments = np.diff(chain, axis=-2)
+    lengths = np.linalg.norm(segments, axis=-1, keepdims=True)
+    bones = segments / lengths
     a, b = bones[..., :-1, :], bones[..., 1:, :]
-    bend = np.arctan2(np.linalg.norm(np.cross(a, b), axis=-1), (a*b).sum(axis=-1))
+    axis = np.cross(a, b)
+    sine = np.linalg.norm(axis, axis=-1)
+    bend = np.arctan2(sine, (a * b).sum(axis=-1))
+    return bones, lengths, axis, sine, bend
+
+
+def finger_shape(chain):
+    bones, _, _, _, bend = bone_geometry(chain)
     return bones[..., 0, :], bend
 
 
@@ -93,6 +103,22 @@ class Hand:
         self.wrist = self.data.xpos[palm].copy()
         self.axes = self.data.xmat[palm].reshape(3,3).copy()
         self.centers, self.normals = cad_patches(mesh_dir, side)
+
+    def actuator_gradient(self, point_grad, pad_grad, normal_grad, pos, pads, normals):
+        """Pull palm-frame derivatives back through the current fixed-wrist pose."""
+        # A distal rotation moves the pad center and rotates its surface normal.
+        torque = np.cross(pads - pos[:, 2], pad_grad) + np.cross(normals, normal_grad)
+        point_grad[:, 2] += pad_grad
+        force_world = point_grad @ self.axes.T
+        torque_world = np.zeros_like(force_world)
+        torque_world[:, 2] = torque @ self.axes.T
+        mj.mj_comPos(self.model, self.data)
+        joint_grad = np.zeros(self.model.nv)
+        for body, force, moment in zip(self.ids.flat, force_world.reshape(-1, 3),
+                                       torque_world.reshape(-1, 3)):
+            # J_position.T @ force + J_rotation.T @ moment, at the body origin.
+            mj.mj_applyFT(self.model, self.data, force, moment, self.data.xpos[body], body, joint_grad)
+        return joint_grad @ self.mapping  # includes the four passive J1 joints
 
     def states(self, controls):
         # Perturb the independent actuators only. The same compiled coupling
@@ -116,31 +142,79 @@ def filtered(series):
     return np.stack([filt.update(v, i/FPS).copy() for i,v in enumerate(series)])
 
 
-def objective(hand, chain, pad, normal, previous, weight, *, opposition=False):
+def shape_point_gradient(bones, lengths, axis, sine, root_error, bend_error):
+    """Differentiate root directions and unsigned bend angles w.r.t. the chain points."""
+    root = bones[:, 0]
+    root_grad = 2 * root_error / (len(root) * ANGLE**2)
+    bone_grad = np.zeros_like(bones)
+    bone_grad[:, 0] = root_grad - root * (root * root_grad).sum(axis=-1, keepdims=True)
+
+    a, b = bones[:, :-1], bones[:, 1:]
+    sine = sine[..., None]
+    # At collinearity the unsigned angle has a cusp. Its symmetric derivative
+    # is zero, matching centered differences at the exactly straight pose.
+    plane = np.divide(axis, sine, out=np.zeros_like(axis), where=sine > 64 * np.finfo(float).eps)
+    bend_grad = (2 / (bend_error.size * ANGLE**2)) * bend_error[..., None]
+    bone_grad[:, :-1] += bend_grad * np.cross(a, plane)
+    bone_grad[:, 1:] += bend_grad * np.cross(plane, b)
+    segment_grad = bone_grad / lengths
+    point_grad = np.zeros((len(bones), bones.shape[1] + 1, 3))
+    point_grad[:, :-1] -= segment_grad
+    point_grad[:, 1:] += segment_grad
+    return point_grad
+
+
+def objective(hand, chain, pad, normal, previous, weight, *, opposition=False, gradient="finite_difference"):
     target_root, target_bend = finger_shape(chain)
     target_vectors = pad[1:] - pad[:1]
     # Nearer pads need finer relative accuracy. Use the same continuous rule
     # for all four pairs, bounded at zero gap by the length tolerance.
+    pair_weights = np.ones(len(target_vectors))
     if opposition:
         palm_width_sq = np.sum((chain[1,0] - chain[4,0])**2)
         pair_weights = 1 + palm_width_sq / (LENGTH**2 + np.sum(target_vectors**2, axis=-1))
     # Distances and angles are normalized by 10 mm and 20 degrees, then each
     # term is averaged across the corresponding digits. No pinch projection.
-    def losses(x):
+    def losses(x, grad=None):
         pos, pads, normals = hand.states(x)
-        root, bend = finger_shape(pos)
-        pair_errors = np.sum(((pads[:,1:]-pads[:,:1]-target_vectors)/LENGTH)**2, axis=-1)
+        bones, lengths, axis, sine, bend = bone_geometry(pos)
+        root_error = bones[..., 0, :] - target_root
+        bend_error = bend - target_bend
+        pair_delta = pads[:, 1:] - pads[:, :1] - target_vectors
+        pair_errors = np.sum((pair_delta / LENGTH)**2, axis=-1)
         terms = (pair_errors * pair_weights if opposition else pair_errors).mean(axis=1)
-        terms += np.mean(np.sum(((root-target_root)/ANGLE)**2, axis=-1),axis=1)
-        terms += np.mean(((bend-target_bend)/ANGLE)**2, axis=(1,2))
+        terms += np.mean(np.sum((root_error/ANGLE)**2, axis=-1),axis=1)
+        terms += np.mean((bend_error/ANGLE)**2, axis=(1,2))
         terms += np.sum(((normals[:,0]-normal[0])/ANGLE)**2, axis=-1)
         if opposition:
             pad_angles = np.sum(((normals[:,1:]-normal[1:])/ANGLE)**2, axis=-1)
             terms += (np.sqrt(pair_weights) * pad_angles).mean(axis=1)
         centroid_delta = pads.mean(1)-pad.mean(0)
         terms += weight*np.sum((centroid_delta/LENGTH)**2, axis=-1)
-        terms += .03*np.mean(((x-previous)/ANGLE)**2,axis=1)
+        terms += JOINT_MOTION_WEIGHT * np.mean(((x - previous) / ANGLE)**2, axis=1)
+        if grad is not None:
+            # Analytical evaluations contain a single pose. hand.data is still at x[0].
+            pos, pads, normals = pos[0], pads[0], normals[0]
+            point_grad = shape_point_gradient(bones[0], lengths[0], axis[0], sine[0],
+                                              root_error[0], bend_error[0])
+            pair_grad = (2 / (len(target_vectors) * LENGTH**2)) * pair_weights[:, None] * pair_delta[0]
+            pad_grad = np.vstack((-pair_grad.sum(axis=0), pair_grad))
+            pad_grad += (2 * weight / (len(pads) * LENGTH**2)) * centroid_delta[0]
+            normal_grad = np.zeros_like(normals)
+            normal_grad[0] = (2 / ANGLE**2) * (normals[0] - normal[0])
+            if opposition:
+                normal_grad[1:] = (2 / (len(target_vectors) * ANGLE**2)) * (
+                    np.sqrt(pair_weights)[:, None] * (normals[1:] - normal[1:]))
+            grad[:] = hand.actuator_gradient(point_grad, pad_grad, normal_grad, pos, pads, normals)
+            grad += (2 * JOINT_MOTION_WEIGHT / (len(previous) * ANGLE**2)) * (x[0] - previous)
         return terms
+
+    if gradient == "analytic":
+        def analytic(x, grad):
+            return float(losses(x[None, :], grad if grad.size else None)[0])
+        return analytic
+    if gradient != "finite_difference":
+        raise ValueError(f"Unknown shape gradient: {gradient}")
 
     n = len(previous)
     eps = 1e-5

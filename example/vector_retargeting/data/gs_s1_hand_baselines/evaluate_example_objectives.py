@@ -49,7 +49,7 @@ def vector_solver():
                                    'right', show_collisions=True)
 
 
-def replay(method, data, args, meshes):
+def replay(method, data, args, meshes, *, gradient="finite_difference", trace=None):
     if method == 'anyteleop_vector':
         seq, cad = vector_solver()
     else:
@@ -57,7 +57,7 @@ def replay(method, data, args, meshes):
     model = load_hand(args.assets, meshes, 'right')
     filt = LandmarkFilter('one_euro')
     if method == 'botyard':
-        retargeter = BotyardRetargeter(seq, model, meshes, 'right', None, 'one_euro')
+        retargeter = BotyardRetargeter(seq, model, meshes, 'right', None, 'one_euro', gradient=gradient)
         np.testing.assert_array_equal(retargeter.mano.faces, data['faces'])
         solver = retargeter.output
     else:
@@ -94,6 +94,8 @@ def replay(method, data, args, meshes):
     diagnostics = dict(held_frames=sum(held_frames), cad_collision_frames=collisions,
                        max_joint_step_p95_deg=np.percentile(max_step, 95),
                        retarget_p50_ms=np.median(elapsed), retarget_p95_ms=np.percentile(elapsed, 95))
+    if trace is not None:
+        trace.update(commands=commands, joint_names=solver.opt.target_joint_names, elapsed=np.array(elapsed))
     return chain, normals, gaps, diagnostics
 
 
@@ -140,6 +142,36 @@ def write_rows(path, rows):
         writer.writerows(rows)
 
 
+def compare_botyard_gradients(data, args, meshes, windows):
+    """Replay from neutral in forward and reverse order, pool per-frame latencies."""
+    traces, timings, results = {}, {}, {}
+    for mode in ('finite_difference', 'analytic', 'analytic', 'finite_difference'):
+        trace = {}
+        chain, normals, gaps, diagnostics = replay('botyard', data, args, meshes, gradient=mode, trace=trace)
+        timings.setdefault(mode, []).append(trace['elapsed'])
+        if mode in traces:
+            np.testing.assert_array_equal(trace['commands'], traces[mode]['commands'])
+            continue
+        traces[mode] = trace
+        row, digits = scores(mode, chain, normals, gaps, diagnostics, data, windows)
+        row['little_bend_deg'] = digits[-1]['bend_deg']
+        row['little_opposition_gap_mae_mm'] = digits[-1]['opposition_gap_mae_mm']
+        results[mode] = row
+
+    baseline = traces['finite_difference']['commands']
+    for mode, row in results.items():
+        elapsed = np.concatenate(timings[mode])
+        delta = np.rad2deg(abs(traces[mode]['commands'] - baseline))
+        i, j = np.unravel_index(delta.argmax(), delta.shape)
+        row.update(timing_passes=len(timings[mode]), retarget_mean_ms=elapsed.mean(),
+                   retarget_p50_ms=np.median(elapsed), retarget_p95_ms=np.percentile(elapsed, 95),
+                   joint_delta_p95_deg=np.percentile(delta.max(axis=1), 95),
+                   joint_delta_max_deg=delta[i, j], frames_over_5deg=int((delta.max(axis=1) > 5).sum()),
+                   worst_frame=int(data['frame'][i]) if delta[i, j] else None,
+                   worst_joint=traces[mode]['joint_names'][j] if delta[i, j] else None)
+    write_rows(args.out / 'botyard_gradients.csv', list(results.values()))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--example', type=Path, default=HERE / 'example_rgb_mano')
@@ -147,6 +179,8 @@ def main():
     parser.add_argument('--assets', type=Path, default=ROOT.parent / 'tendon-spin/assets')
     parser.add_argument('--wuji-root', type=Path, default=ROOT.parent / 'wuji-retargeting')
     parser.add_argument('--tsinghua-root', type=Path, default=ROOT.parent / 'tsinghua-retargeting')
+    parser.add_argument('--compare-botyard-gradients', action='store_true',
+                        help='Compare the two Botyard shape gradients on the same clip, twice each')
     args = parser.parse_args()
     args.hand = 'right'
     with np.load(args.example / 'mano.npz') as m:
@@ -161,13 +195,16 @@ def main():
     _, data['normals'], _ = surface_targets(data, dict(frame=frames, raw_human_palm_m=data['local']))
     windows = windows_for(frames, fps, args.example)
     meshes = Path(get_package_share_directory('dexhand_description')) / 'meshes/gs_s1'
+    args.out.mkdir(exist_ok=True, parents=True)
+    if args.compare_botyard_gradients:
+        compare_botyard_gradients(data, args, meshes, windows)
+        return
     rows, digits = [], []
     for method in METHODS:
         row, by_digit = scores(method, *replay(method, data, args, meshes), data, windows)
         print(row, flush=True)
         rows.append(row)
         digits.extend(by_digit)
-    args.out.mkdir(exist_ok=True, parents=True)
     write_rows(args.out / 'summary.csv', rows)
     write_rows(args.out / 'per_digit.csv', digits)
 

@@ -35,6 +35,7 @@ def start_preview(context):
     tracker_env = {"PYTHONPATH": os.pathsep.join([str(src), os.environ.get("PYTHONPATH", "")])}
     if LaunchConfiguration("objective").perform(context) == "botyard":
         tracker_env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
+        input_args.extend(["--botyard-gradient", LaunchConfiguration("botyard_gradient")])
         mano_model = LaunchConfiguration("mano_model").perform(context)
         if mano_model:
             input_args.extend(["--mano-model", mano_model])
@@ -79,6 +80,7 @@ def generate_launch_description():
         DeclareLaunchArgument("backend", default_value="rviz", choices=["rviz", "mujoco"]),
         DeclareLaunchArgument("hand", default_value="right", choices=["right", "left"]),
         DeclareLaunchArgument("objective", default_value="dexpilot", choices=["dexpilot", "wuji", "vector", "tsinghua", "botyard"]),
+        DeclareLaunchArgument("botyard_gradient", default_value="finite_difference", choices=["finite_difference", "analytic"]),
         DeclareLaunchArgument("smoothing", default_value="one_euro", choices=["one_euro", "off"]),
         DeclareLaunchArgument("wuji_root", default_value=str(projects / "wuji-retargeting")),
         DeclareLaunchArgument("tsinghua_root", default_value=str(projects / "tsinghua-retargeting")),
