@@ -146,3 +146,27 @@ MUJOCO_GL=osmesa "$dex_python" "$bench_dir/render_example_mano.py" \
   ~/Videos/example-mano-gs-s1-v3.2-vs-v3.3.mp4 "$fitted_dir/observations.npz" --compare-v3.3 \
   "$ablation_dir/w0.70_base0.006_compressed_carry_mcp.npz" "$ablation_dir/w0.70_base0.006_scaled_carry_mcp.npz"
 ```
+
+## 同一 MANO 输入上的论文基线与通用指标
+
+复跑入口使用官方 `human_hand_video.mp4` 的 621 个连续右手帧（30 Hz）。此片参与过 Botyard 的开发和选参。五种方法从中立位出发，使用同一个固定腕部的 GS S1 V3.2 模型、16 个主动关节、四个随 J2 联动的非拇指 J1、关节速度和碰撞约束。所有人手输入来自同一次离线 MANO 拟合；只有 Botyard 使用同时拟合得到的表面。每种方法从头运行，启用项目默认的 One Euro 输入滤波。机器人评分使用逐帧指令的 MuJoCo 正向运动学，与同帧、未经 One Euro 滤波的 MANO 作比较。示例缺少独立三维和接触真值。
+
+- DexPilot 采用 `dex-retargeting` 的 DexPilot 目标。AnyTeleop 向量基线取官方 Shadow 五指配置的十个掌部到指尖和中节的向量，适配至 GS S1 后使用尺度 1.0。清华方案使用 `3846d3f` 提供的五指完整目标的固定腕部适配。Wuji 为额外开源对照，采用 `531f6ed` 的解析优化目标。Botyard 使用实时入口相同的两阶段后端和每帧拟合掌宽。
+- 清华 Xin 等人（IEEE Robotics and Automation Practice 2026，DOI `10.1109/RAP.2026.3656110`）评估指尖相对腕部、相对拇指的位置，以及末节方向。本表在各自掌坐标系内计算原始毫米欧氏距离，全片评五指；拇指相对误差另报四个预存对指窗中当时参与对指的那根手指。末节方向取从末节关节到指尖的向量夹角，单位为度。腕部固定使世界位置无法提供独立的手腕跟踪信息。
+- ManipTrans（CVPR 2025）评估手部关节点和指尖的三维位置误差。本表的 `mpjpe21_wrist_mm` 是掌坐标系适配值，21 点为原点及每指四点，机器人取 proximal、middle、distal、tip 的模型原点。腕部误差按定义为零。人机解剖结构不同，这些绝对长度误差也反映尺寸和关节点定义差异。
+- `tip_displacement_100ms_mm` 对相隔三帧的指尖位移向量求人机欧氏误差，再对所有时间窗和五指平均，单位为毫米。它覆盖这段录像中的动作。GeoRT（IROS 2025）在整个手指构型空间上采样方向和位置，评估运动方向保持与空间覆盖率，两者的采样范围不同。
+- `bend_deg` 比较每指两处相邻骨段夹角。`thumb_pad_normal_deg` 测拇指内侧指腹法线夹角。`opposition_gap_mae_mm` 比较四个原视频对指窗内参与指对的末节表面最短距离。`matched_near_pairs` 的分母为人手间隙 ≤2 mm 的指对帧数，`false_near_pairs` 的分母为人手 ≥5 mm 的指对帧数，机器人近接以 ≤2 mm 计算。阈值仅用于评分。
+- `max_joint_step_p95_deg` 为相邻帧中 16 个主动关节最大角变化的第 95 百分位。`cad_collision_frames` 逐指令检查非相邻 URDF 碰撞几何。`held_frames` 计任一阶段求解回退的帧数。`retarget_p50_ms` 和 `retarget_p95_ms` 计从已拟合 MANO 到关节指令的单帧墙钟时间，含该方法的特征处理与滤波，排除视频检测、MANO 拟合、显示和离线打分。本机 Intel Core i7-14650HX，方法依次运行，各数值库使用单线程配置。
+
+使用本机已准备的右手 MANO 模板和本目录的离线拟合，从仓库根目录运行：
+
+```zsh
+source /opt/ros/humble/setup.zsh
+source ~/botyard_ws/install/setup.zsh
+export PYTHONPATH="$PWD/src:$PWD/example/vector_retargeting:$PYTHONPATH"
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  ~/miniconda3/envs/dex_retargeting/bin/python \
+  example/vector_retargeting/data/gs_s1_hand_baselines/evaluate_example_objectives.py
+```
+
+[总体指标](../example_paper_metrics/summary.csv) · [逐指指标](../example_paper_metrics/per_digit.csv)

@@ -147,6 +147,10 @@ class BotyardRetargeter:
 
     def solve_camera(self, camera_points, pixels, size, timestamp, dt):
         joints, vertices = self.mano.fit(camera_points, pixels, size, timestamp)
+        return self.solve_mano(joints, vertices, timestamp, dt)
+
+    def solve_mano(self, joints, vertices, timestamp, dt):
+        """Retarget a fitted MANO frame in wrist-centered camera coordinates."""
         frame = SingleHandDetector.estimate_frame_from_hand_points(joints) @ self.frame_transform
         local = (joints - joints[0]) @ frame
         surface = dict(frame=[0], vertices=vertices[None], joints=joints[None], faces=self.mano.faces)
