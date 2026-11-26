@@ -170,3 +170,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 ```
 
 [总体指标](../example_paper_metrics/summary.csv) · [逐指指标](../example_paper_metrics/per_digit.csv)
+
+### Botyard 单帧求解提速对照
+
+在上述 621 帧上比较提交 `0764ec8` 和缓存最近表面点的版本。对四组拇指与其他手指末节，分别保存上次最近点在各自刚体上的坐标。在新姿态下，两点距离给出了完整网格最短距离的上界，hpp-fcl 可以据此跳过更远的包围盒。PQP 的三角面缓存使用了相似的思路（Larsen 等人，*Fast Proximity Queries with Swept Sphere Volumes*）。
+
+两版各从中立位回放两遍，第二轮交换运行顺序。汇总两轮后，从已拟合 MANO 到关节指令的单帧中位耗时从 104.9 降到 83.9 ms，P95 从 251.8 降到 202.7 ms。逐帧比对的 16 个关节角完全一致。用 `0764ec8` 的完整网格查询独立复算，四组末节间隙也逐帧一致。左右手另各检查了 133 个姿态（包括中立位、关节限位和随机跳转），距离及其对关节的梯度与原版一致。
+
+另做了一次局部三角面子集搜索实验，中位耗时为 93.3 ms，相对原版的单关节最大偏差为 5.37°。默认路径采用完整网格加最近点缓存。每种实现的耗时、弯曲、指腹朝向和接触指标见[提速对照表](../example_paper_metrics/botyard_speed.csv)。

@@ -1,0 +1,4 @@
+﻿method,frames,timing_passes,mean_ms,p50_ms,p95_ms,stage1_mean_ms,stage2_mean_ms,max_joint_delta_vs_original_deg,max_distal_gap_delta_vs_original_mm,opposition_gap_mae_mm,bend_deg,thumb_pad_normal_deg,near_pairs,matched_near_pairs,separated_pairs,false_near_pairs,cad_collision_frames,held_frames
+original,621,2,131.262422,104.886146,251.801278,53.2366,75.143875,0.0,0.0,1.731095,11.90587,40.970203,115,94,2362,0,0,0
+cached_surface_points,621,2,108.468479,83.911317,202.672022,52.70753,52.893517,0.0,0.0,1.731095,11.90587,40.970203,115,94,2362,0,0,0
+local_mesh_subset_experiment,621,1,117.837451,93.295244,219.2518,53.652854,61.290377,5.372987,4.266858,1.738777,11.908486,40.974812,115,94,2362,0,0,0

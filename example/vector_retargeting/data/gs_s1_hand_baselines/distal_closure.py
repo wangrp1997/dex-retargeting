@@ -58,6 +58,7 @@ class DistalClosure:
         self.ids = [self.model.body(d + 'distal').id for d in DIGITS]
         loader = hppfcl.MeshLoader()
         self.meshes = [load_body_mesh(self.model, loader, i) for i in self.ids]
+        self.local_witnesses = [None] * (len(self.ids) - 1)
         self.request = hppfcl.DistanceRequest()
         self.request.enable_nearest_points = True
         self.jac_a = np.empty((3, self.model.nv))
@@ -77,16 +78,31 @@ class DistalClosure:
                       for i in self.ids]
         gaps = np.empty(4)
         jac = np.zeros((4, len(x))) if with_gradient else None
-        for digit in range(1, 5):
+        thumb_pose = transforms[0]
+        for pair, finger_pose in enumerate(transforms[1:]):
+            digit = pair + 1
+            query = (self.meshes[0], thumb_pose, self.meshes[digit], finger_pose, self.request)
+            seed = self.local_witnesses[pair]
             result = hppfcl.DistanceResult()
-            distance = hppfcl.distance(self.meshes[0], transforms[0], self.meshes[digit],
-                                       transforms[digit], self.request, result)
-            gaps[digit - 1] = max(distance, 0.)
-            if with_gradient and distance > 1e-10:
+            if seed is not None:
+                # Points fixed on the two surfaces still bound the minimum distance
+                # at the new pose. Leave slack for floating-point roundoff.
+                separation = finger_pose.transform(seed[1]) - thumb_pose.transform(seed[0])
+                result.min_distance = np.linalg.norm(separation) + 1e-10
+            distance = hppfcl.distance(*query, result)
+            if seed is not None and (result.b1 < 0 or result.b2 < 0):
+                # A bound without a triangle pair cannot supply a distance gradient.
+                result = hppfcl.DistanceResult()
+                distance = hppfcl.distance(*query, result)
+            gaps[pair] = max(distance, 0.)
+            if distance > 1e-10:
                 a, b = result.getNearestPoint1(), result.getNearestPoint2()
-                mujoco.mj_jac(self.model, self.data, self.jac_a, None, a, self.ids[0])
-                mujoco.mj_jac(self.model, self.data, self.jac_b, None, b, self.ids[digit])
-                jac[digit - 1] = ((b-a) / distance) @ (self.jac_b-self.jac_a) @ self.mapping
+                self.local_witnesses[pair] = (thumb_pose.inverse().transform(a),
+                                              finger_pose.inverse().transform(b))
+                if with_gradient:
+                    mujoco.mj_jac(self.model, self.data, self.jac_a, None, a, self.ids[0])
+                    mujoco.mj_jac(self.model, self.data, self.jac_b, None, b, self.ids[digit])
+                    jac[pair] = ((b-a) / distance) @ (self.jac_b-self.jac_a) @ self.mapping
         return gaps, jac
 
     def objective(self, reference, weights, target=None, *, motion=None):
