@@ -39,6 +39,7 @@ class SessionRecorder:
         with (directory / 'scene.xml').open('xb') as xml:
             ET.ElementTree(scene).write(xml, encoding='utf-8')
         self.states = cleanup.enter_context((directory / 'sim_states.jsonl').open('x'))
+        self.targets = cleanup.enter_context((directory / 'retargeting.jsonl').open('x'))
         log = cleanup.enter_context((directory / 'frames.csv').open('x', newline=''))
         self.log = log
         self.rows = csv.writer(log)
@@ -86,7 +87,7 @@ class SessionRecorder:
         self.read_ns = self.node.get_clock().now().nanoseconds
         self.sample = self.latest
 
-    def write_frame(self, frame, timestamp, detector, landmarks, mano, tracking):
+    def write_frame(self, frame, timestamp, detector, landmarks, mano, tracking, command, trace):
         import cv2
         import numpy as np
 
@@ -112,6 +113,13 @@ class SessionRecorder:
         self.states.flush()
         if self.start is None:
             self.start = timestamp
+        stamp = command.header.stamp
+        diagnostic = dict(frame=self.count, time_s=timestamp-self.start, tracking=bool(tracking),
+                          command_stamp_ns=stamp.sec * 10**9 + stamp.nanosec,
+                          command_joint_names=list(command.name), command_position_rad=list(command.position), **trace)
+        self.targets.write(json.dumps(diagnostic, default=lambda a: a.tolist(), separators=(',', ':'),
+                                      allow_nan=False) + '\n')
+        self.targets.flush()
         self.rows.writerow((self.count, f'{timestamp-self.start:.9f}', self.read_ns, sim_ns,
                             f'{(self.read_ns-sim_ns)/1e6:.3f}', int(detected), int(tracking), int(visible)))
         self.log.flush()
@@ -127,6 +135,9 @@ def render_session_frames(directory, rows, staging):
     data = mujoco.MjData(model)
     camera = mujoco.MjvCamera()
     options = mujoco.MjvOption()
+    from gs_s1_mano_overlay import ManoOverlay
+    overlay = None
+    last_payload = None
     epoch = int(rows[0]['camera_read_ros_ns'])
     last_time = -1.
     with mujoco.Renderer(model, width=640, height=480) as renderer, (directory / 'sim_states.jsonl').open() as states:
@@ -146,8 +157,22 @@ def render_session_frames(directory, rows, staging):
                     setattr(camera, name, value)
             for name, values in state['options'].items():
                 getattr(options, name)[:] = values
+            payload = state.get('mano_overlay_pose')
+            if payload and overlay is None:
+                overlay = ManoOverlay(model)
+            if overlay is not None:
+                overlay.set_visible(bool(payload))
             renderer.update_scene(data, camera=camera, scene_option=options)
+            if payload:
+                if payload != last_payload:
+                    overlay.update_vertices(payload)
+                    mujoco.mjr_uploadMesh(model, renderer._mjr_context, overlay.mesh_id)
+                    last_payload = payload
+                overlay.draw(renderer.scene, data)
             sim = cv2.cvtColor(renderer.render(), cv2.COLOR_RGB2BGR)
+            if payload:
+                cv2.putText(sim, 'Thumb: cyan MANO / orange GS S1', (10, sim.shape[0] - 12),
+                            cv2.FONT_HERSHEY_SIMPLEX, .55, (255, 255, 255), 1, cv2.LINE_AA)
             name = f'{i:08d}.jpg'
             tiles = cv2.imread(str(directory / 'frames' / name))
             if tiles is None:

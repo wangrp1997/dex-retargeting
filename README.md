@@ -34,13 +34,13 @@
   <img src="example/vector_retargeting/teaser.webp" alt="Retargeting with different hands.">
 </div>
 
-## Botyard Retargeting
+## Botyard Retargeting v4.2
 
 Select `objective:=botyard` for webcam control of the left or right GS S1 in RViz or MuJoCo. [Camera setup and commands](example/vector_retargeting/README.md#botyard-gs-s1-v32-webcam-preview)
 
-The optimizer tracks finger curl, pad orientation and thumb-to-finger surface gaps. The four passive distal joints follow their respective middle joints. The DexMV mustard-bottle trial reproduced early thumb contact and failed to lift the free bottle.
+The default Botyard v4.2 controller first tracks MANO finger directions and bends, then refines the thumb's custom inward-facing preference and distal-surface proximity. Per-digit source-error bounds keep the proximity task from gradually straightening a fist; J4 remains free to follow observed spread. Thumb facing is a weak preference during closure so it can adjust for index opposition. The four passive distal joints follow their respective middle joints.
 
-[RGB example and v3.3 settings](example/vector_retargeting/data/gs_s1_hand_baselines/example_rgb_mano/README.md) · [DexMV replay and results](example/vector_retargeting/data/gs_s1_hand_baselines/mustard_v32_v33/README.md)
+[v4.2 algorithm, replay and validation](example/vector_retargeting/data/gs_s1_hand_baselines/botyard_v4_2/README.md) · [Historical v3.3 settings](example/vector_retargeting/data/gs_s1_hand_baselines/example_rgb_mano/README.md) · [Historical DexMV replay](example/vector_retargeting/data/gs_s1_hand_baselines/mustard_v32_v33/README.md)
 
 ## Installation
 

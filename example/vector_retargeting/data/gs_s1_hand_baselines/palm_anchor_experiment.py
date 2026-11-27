@@ -23,6 +23,10 @@ WEAK_WEIGHT = .1
 LENGTH = .010
 ANGLE = np.deg2rad(20.)
 JOINT_MOTION_WEIGHT = .03
+# Fixed relative weights for the optional phalanx objective, shared by all frames.
+PHALANX_DIRECTION_WEIGHT = 4.
+FLEXION_PLANE_WEIGHT = 32.
+THUMB_PAD_WEIGHT = .2
 
 
 def surface_targets(surface, track):
@@ -102,7 +106,64 @@ class Hand:
         palm = model.body('palm').id
         self.wrist = self.data.xpos[palm].copy()
         self.axes = self.data.xmat[palm].reshape(3,3).copy()
+        roots = (self.data.xpos[self.ids[[1, 4], 0]] - self.wrist) @ self.axes
+        self.index_anchor = roots[0]
+        self.palm_width = np.linalg.norm(roots[0] - roots[1])
+        self.radial_axis = (roots[0] - roots[1]) / self.palm_width
         self.centers, self.normals = cad_patches(mesh_dir, side)
+        fingers = ('FF', 'MF', 'RF', 'LF')
+        drives = list(solver.opt.target_joint_names)
+        self.spread_indices = [drives.index(f + 'J4') for f in fingers]
+        spread = np.array([self.data.xaxis[model.joint(f + 'J4').id] for f in fingers]) @ self.axes
+        flex = np.array([self.data.xaxis[model.joint(f + 'J3').id] for f in fingers]) @ self.axes
+        # J4 rotates the J3 flexion axis. Rodrigues' formula gives its direction
+        # in the palm frame for either hand, without dividing by projected bone length.
+        parallel = spread * np.sum(spread * flex, axis=-1, keepdims=True)
+        self.flexion_basis = np.stack((parallel, flex - parallel, np.cross(spread, flex)), axis=1)
+        neutral_thumb = (self.data.xpos[self.ids[0]] - self.wrist) @ self.axes
+        self.thumb_lengths = np.linalg.norm(np.diff(neutral_thumb, axis=0), axis=-1)
+        self.thumb_zero_bends = bone_geometry(neutral_thumb)[4]
+        self.thumb_flexion_indices = [drives.index(n) for n in ('THJ2', 'THJ1')]
+
+    def thumb_bend_seed(self, chain, previous):
+        """Initialize on the flexion branch beyond the CAD's tiny zero offset."""
+        bends = bone_geometry(chain)[4][0]
+        seed = previous.copy()
+        seed[self.thumb_flexion_indices] = [bends[0] + self.thumb_zero_bends[0],
+                                            bends[1] - self.thumb_zero_bends[1]]
+        return seed
+
+    def thumb_direction_target(self, chain):
+        """Robot-length-normalized direction of the complete observed thumb."""
+        bones = bone_geometry(chain)[0][0]
+        return unit(np.sum(self.thumb_lengths[:, None] * bones, axis=0))
+
+    def thumb_refinement_loss(self, chain, normal):
+        """Track signed reach and pad orientation during the distal-gap refinement."""
+        reach = thumb_span_in_palm_widths(chain[0, -1], chain[1, 0], chain[4, 0])
+        axis = self.axes @ self.radial_axis
+        index = self.wrist + self.axes @ self.index_anchor
+        target = np.dot(index, axis) + self.palm_width * reach
+        target_normal = self.axes @ normal
+        distal, tip = self.ids[0, 2:]
+        jac_pos = np.empty((3, self.model.nv))
+        jac_rot = np.empty_like(jac_pos)
+        weight = .15
+
+        def loss(data, grad):
+            # The gap objective has already evaluated kinematics for this pose.
+            delta = np.dot(data.xpos[tip], axis) - target
+            direction = data.xmat[distal].reshape(3, 3) @ self.normals[0]
+            error = direction - target_normal
+            if grad.size:
+                # The tip is fixed to the distal body and shares its angular Jacobian.
+                mj.mj_jacBody(self.model, data, jac_pos, jac_rot, tip)
+                slope = delta / LENGTH**2 * (axis @ jac_pos)
+                slope += np.cross(direction, error) @ jac_rot / ANGLE**2
+                grad += 2 * weight * (slope @ self.mapping)
+            return weight * ((delta / LENGTH)**2 + np.dot(error, error) / ANGLE**2)
+
+        return loss
 
     def actuator_gradient(self, point_grad, pad_grad, normal_grad, pos, pads, normals):
         """Pull palm-frame derivatives back through the current fixed-wrist pose."""
@@ -142,12 +203,17 @@ def filtered(series):
     return np.stack([filt.update(v, i/FPS).copy() for i,v in enumerate(series)])
 
 
-def shape_point_gradient(bones, lengths, axis, sine, root_error, bend_error):
-    """Differentiate root directions and unsigned bend angles w.r.t. the chain points."""
+def shape_point_gradient(bones, lengths, axis, sine, root_error, bend_error, direction_error=None):
+    """Differentiate bone directions and unsigned bend angles with respect to chain points."""
     root = bones[:, 0]
     root_grad = 2 * root_error / (len(root) * ANGLE**2)
     bone_grad = np.zeros_like(bones)
     bone_grad[:, 0] = root_grad - root * (root * root_grad).sum(axis=-1, keepdims=True)
+    if direction_error is not None:
+        directions = bones[1:]
+        tangents = direction_error - directions * (directions * direction_error).sum(axis=-1, keepdims=True)
+        count = directions.shape[0] * directions.shape[1]
+        bone_grad[1:] += (2 * PHALANX_DIRECTION_WEIGHT / (count * ANGLE**2)) * tangents
 
     a, b = bones[:, :-1], bones[:, 1:]
     sine = sine[..., None]
@@ -164,8 +230,142 @@ def shape_point_gradient(bones, lengths, axis, sine, root_error, bend_error):
     return point_grad
 
 
-def objective(hand, chain, pad, normal, previous, weight, *, opposition=False, gradient="finite_difference"):
-    target_root, target_bend = finger_shape(chain)
+def thumb_span_in_palm_widths(tip, index_mcp, little_mcp):
+    """Signed projection beyond the index MCP along the little-to-index axis."""
+    across = index_mcp - little_mcp
+    return np.dot(tip - index_mcp, across) / np.dot(across, across)
+
+
+def direction_objective(hand, chain, previous, *, gradient="finite_difference", thumb_base_only=False):
+    """Fit each digit's directions and bends independently of human bone lengths.
+
+    Robot roots and segment lengths determine the resulting fingertip positions.
+    Cross-digit positions and surface gaps are omitted. Thumb flexion can be
+    fitted independently of distal absolute directions for base-only refinement.
+    """
+    target_bones, _, _, _, target_bend = bone_geometry(chain)
+    direction_weights = np.ones((5, 3, 1))
+    if thumb_base_only:
+        # Thumb flexion follows its intrinsic bend angles. Distal absolute
+        # directions must not bend J1/J2 to compensate a changed base roll.
+        direction_weights[0, 1:] = 0
+    direction_count = direction_weights.sum()
+
+    def losses(x, grad=None):
+        pos, pads, normals = hand.states(x)
+        bones, lengths, axis, sine, bend = bone_geometry(pos)
+        direction_error = bones - target_bones
+        bend_error = bend - target_bend
+        terms = np.sum(direction_weights * (direction_error / ANGLE)**2, axis=(1, 2, 3)) / direction_count
+        terms += np.mean((bend_error / ANGLE)**2, axis=(1, 2))
+        terms += JOINT_MOTION_WEIGHT * np.mean(((x - previous) / ANGLE)**2, axis=1)
+        if grad is not None:
+            # Unit-vector derivatives live in the tangent plane of each bone.
+            bones, lengths = bones[0], lengths[0]
+            error = direction_error[0]
+            tangents = error - bones * np.sum(bones * error, axis=-1, keepdims=True)
+            segment_grad = 2 * direction_weights * tangents / (direction_count * ANGLE**2 * lengths)
+            point_grad = shape_point_gradient(bones, lengths, axis[0], sine[0],
+                                              np.zeros_like(bones[:, 0]), bend_error[0])
+            point_grad[:, :-1] -= segment_grad
+            point_grad[:, 1:] += segment_grad
+            grad[:] = hand.actuator_gradient(point_grad, np.zeros_like(pads[0]),
+                                             np.zeros_like(normals[0]), pos[0], pads[0], normals[0])
+            grad += 2 * JOINT_MOTION_WEIGHT * (x[0] - previous) / (len(previous) * ANGLE**2)
+        return terms
+
+    if gradient == "analytic":
+        def analytic(x, grad):
+            return float(losses(x[None], grad if grad.size else None)[0])
+        return analytic
+    if gradient != "finite_difference":
+        raise ValueError(f"Unknown shape gradient: {gradient}")
+    n, eps = len(previous), 1e-5
+    displacements = np.vstack((np.zeros((1, n)), eps * np.eye(n), -eps * np.eye(n)))
+
+    def callback(x, grad):
+        values = losses(x + displacements if grad.size else x[None])
+        if grad.size:
+            grad[:] = (values[1:n + 1] - values[n + 1:]) / (2 * eps)
+        return float(values[0])
+
+    return callback
+
+
+def thumb_base_objective(hand, chain, previous, *, gradient="finite_difference", opponents=None):
+    """Fit the thumb's overall ray; callers fix flexion and the other fingers.
+
+    There is one continuous objective over the entire workspace. Palm crossing,
+    prescribed inside/outside roll angles are absent. Fixed opposing pad centres
+    define a smooth facing field, without a contact or crossing classification.
+    """
+    target = hand.thumb_direction_target(chain)
+
+    def losses(x, grad=None):
+        pos, pads, normals = hand.states(x)
+        ray = pos[:, 0, -1] - pos[:, 0, 0]
+        length = np.linalg.norm(ray, axis=-1, keepdims=True)
+        direction = ray / length
+        error = direction - target
+        terms = np.sum((error / ANGLE)**2, axis=-1)
+        terms += JOINT_MOTION_WEIGHT * np.mean(((x - previous) / ANGLE)**2, axis=1)
+        if opponents is not None:
+            delta = opponents[None] - pads[:, :1]
+            distance_sq = np.sum(delta**2, axis=-1, keepdims=True) + LENGTH**2
+            field = np.sum(delta / distance_sq, axis=1)
+            field_length = np.sqrt(np.sum(field**2, axis=-1, keepdims=True) + 1e-12)
+            field_direction = field / field_length
+            pad_error = normals[:, 0] - field_direction
+            terms += THUMB_PAD_WEIGHT * np.sum((pad_error / ANGLE)**2, axis=-1)
+        if grad is not None:
+            tangent = error[0] - direction[0] * np.dot(direction[0], error[0])
+            force = 2 * tangent / (ANGLE**2 * length[0, 0])
+            points = np.zeros_like(pos[0])
+            points[0, 0], points[0, -1] = -force, force
+            pad_grad, normal_grad = np.zeros_like(pads[0]), np.zeros_like(normals[0])
+            if opponents is not None:
+                vectors, square = delta[0], distance_sq[0, :, 0]
+                slope = np.sum(-np.eye(3)[None] / square[:, None, None]
+                               + 2 * vectors[:, :, None] * vectors[:, None, :] / square[:, None, None]**2, axis=0)
+                u = field_direction[0]
+                slope = (np.eye(3) - np.outer(u, u)) @ slope / field_length[0, 0]
+                normal_grad[0] = 2 * THUMB_PAD_WEIGHT * pad_error[0] / ANGLE**2
+                pad_grad[0] = -slope.T @ normal_grad[0]
+            grad[:] = hand.actuator_gradient(points, pad_grad, normal_grad, pos[0], pads[0], normals[0])
+            grad += 2 * JOINT_MOTION_WEIGHT * (x[0] - previous) / (len(previous) * ANGLE**2)
+        return terms
+
+    if gradient == "analytic":
+        def analytic(x, grad):
+            return float(losses(x[None], grad if grad.size else None)[0])
+        return analytic
+    if gradient != "finite_difference":
+        raise ValueError(f"Unknown shape gradient: {gradient}")
+    n, eps = len(previous), 1e-5
+    displacements = np.vstack((np.zeros((1, n)), eps * np.eye(n), -eps * np.eye(n)))
+
+    def callback(x, grad):
+        values = losses(x + displacements if grad.size else x[None])
+        if grad.size:
+            grad[:] = (values[1:n + 1] - values[n + 1:]) / (2 * eps)
+        return float(values[0])
+
+    return callback
+
+
+def objective(hand, chain, pad, normal, previous, weight, *, opposition=False, gradient="finite_difference",
+              phalanx=False, thumb_span=False):
+    target_bones, _, _, _, target_bend = bone_geometry(chain)
+    target_root = target_bones[:, 0]
+    if phalanx:
+        # A matched proximal direction lies in the robot finger's flexion plane.
+        # Its dot product with the J3 axis is a smooth signed residual, also at full flexion.
+        offset, cosine, sine_coeff = np.einsum('fkc,fc->kf', hand.flexion_basis, target_root[1:])
+    if thumb_span:
+        # Signed reach beyond the index MCP, measured in palm widths. The fixed
+        # robot palm anchors keep this term independent of long-finger spread.
+        reach = thumb_span_in_palm_widths(chain[0, -1], chain[1, 0], chain[4, 0])
+        radial_target = hand.palm_width * reach
     target_vectors = pad[1:] - pad[:1]
     # Nearer pads need finer relative accuracy. Use the same continuous rule
     # for all four pairs, bounded at zero gap by the length tolerance.
@@ -192,20 +392,38 @@ def objective(hand, chain, pad, normal, previous, weight, *, opposition=False, g
         centroid_delta = pads.mean(1)-pad.mean(0)
         terms += weight*np.sum((centroid_delta/LENGTH)**2, axis=-1)
         terms += JOINT_MOTION_WEIGHT * np.mean(((x - previous) / ANGLE)**2, axis=1)
+        if phalanx:
+            spread = x[:, hand.spread_indices]
+            plane_error = offset + cosine * np.cos(spread) + sine_coeff * np.sin(spread)
+            direction_error = bones[:, 1:] - target_bones[1:]
+            terms += FLEXION_PLANE_WEIGHT * np.mean((plane_error / ANGLE)**2, axis=1)
+            terms += PHALANX_DIRECTION_WEIGHT * np.mean(np.sum((direction_error / ANGLE)**2, axis=-1), axis=(1, 2))
+            # Retain thumb pad orientation when fitting the directions of the other digits.
+            terms += np.sum(((normals[:, 0] - normal[0]) / ANGLE)**2, axis=-1)
+        if thumb_span:
+            radial_delta = (pos[:, 0, -1] - hand.index_anchor) @ hand.radial_axis - radial_target
+            terms += (radial_delta / LENGTH)**2
         if grad is not None:
             # Analytical evaluations contain a single pose. hand.data is still at x[0].
             pos, pads, normals = pos[0], pads[0], normals[0]
             point_grad = shape_point_gradient(bones[0], lengths[0], axis[0], sine[0],
-                                              root_error[0], bend_error[0])
+                                              root_error[0], bend_error[0], direction_error[0] if phalanx else None)
+            if thumb_span:
+                point_grad[0, -1] += 2 * radial_delta[0] * hand.radial_axis / LENGTH**2
             pair_grad = (2 / (len(target_vectors) * LENGTH**2)) * pair_weights[:, None] * pair_delta[0]
             pad_grad = np.vstack((-pair_grad.sum(axis=0), pair_grad))
             pad_grad += (2 * weight / (len(pads) * LENGTH**2)) * centroid_delta[0]
             normal_grad = np.zeros_like(normals)
             normal_grad[0] = (2 / ANGLE**2) * (normals[0] - normal[0])
+            if phalanx:
+                normal_grad[0] *= 2
             if opposition:
                 normal_grad[1:] = (2 / (len(target_vectors) * ANGLE**2)) * (
                     np.sqrt(pair_weights)[:, None] * (normals[1:] - normal[1:]))
             grad[:] = hand.actuator_gradient(point_grad, pad_grad, normal_grad, pos, pads, normals)
+            if phalanx:
+                slope = sine_coeff * np.cos(spread[0]) - cosine * np.sin(spread[0])
+                grad[hand.spread_indices] += 2 * FLEXION_PLANE_WEIGHT * plane_error[0] * slope / (len(slope) * ANGLE**2)
             grad += (2 * JOINT_MOTION_WEIGHT / (len(previous) * ANGLE**2)) * (x[0] - previous)
         return terms
 

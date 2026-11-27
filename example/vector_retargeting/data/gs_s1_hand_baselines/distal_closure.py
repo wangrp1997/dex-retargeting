@@ -105,7 +105,7 @@ class DistalClosure:
                     jac[pair] = ((b-a) / distance) @ (self.jac_b-self.jac_a) @ self.mapping
         return gaps, jac
 
-    def objective(self, reference, weights, target=None, *, motion=None):
+    def objective(self, reference, weights, target=None, *, motion=None, thumb_pose_loss=None):
         if target is None:
             target = self.clearance
         terms = [(target, weights)]
@@ -124,5 +124,7 @@ class DistalClosure:
                 cost += np.dot(importance, 2. * (scale - 1.))
                 if grad.size:
                     grad += (2. * importance * residual / (scale * LENGTH)) @ jac
+            if thumb_pose_loss is not None:
+                cost += thumb_pose_loss(self.data, grad)
             return float(cost)
         return callback

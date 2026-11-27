@@ -102,6 +102,10 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
     interval = 1.0 / fps if is_video and np.isfinite(fps) and fps > 0 else 0.0
     landmark_filter = LandmarkFilter(smoothing)
     botyard = objective_name == "botyard"
+    if botyard:
+        from std_msgs.msg import String
+        from gs_s1_mano_overlay import encode_pose
+        overlay_pub = node.create_publisher(String, "mano_overlay_pose", 1)
     show_mano = botyard
     calibration = FingerRootCalibration(solver.optimizer.robot) if show_camera and not botyard else None
     last_frame = monotonic() - 1 / 30
@@ -120,6 +124,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         capture_time = monotonic()
         if recording is not None:
             recording.sample_simulator()
+        send_overlay = botyard and overlay_pub.get_subscription_count() > 0
+        trace = {} if recording is not None or send_overlay else None
         timestamp = frames * interval if interval else capture_time
         dt = interval or min(capture_time - last_frame, .1)
         last_frame = capture_time
@@ -139,7 +145,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             solve_start = monotonic()
             if botyard:
                 camera_points = points @ detector.operator2mano.T @ wrist_axes.T
-                q = retargeter.solve_camera(camera_points, pixels, frame.shape[1::-1], timestamp, dt)
+                q = retargeter.solve_camera(camera_points, pixels, frame.shape[1::-1], timestamp, dt, trace=trace)
             else:
                 aligned = calibration.apply(target) if calibration is not None else target
                 q = retargeter.solve(target, dt, aligned_points=aligned)
@@ -154,8 +160,11 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             previous_tracking = tracking
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
+        if send_overlay:
+            payload = encode_pose(trace['mano_joints_wrist_m'], trace['mano_vertices_wrist_m']) if tracking else ''
+            overlay_pub.publish(String(data=payload))
         if recording is not None:
-            recording.write_frame(frame, timestamp, detector, landmarks, retargeter.mano, tracking)
+            recording.write_frame(frame, timestamp, detector, landmarks, retargeter.mano, tracking, message, trace)
         if show_camera:
             lines = []
             mesh_visible = tracking and show_mano and retargeter.mano.draw_overlay(frame)
@@ -212,8 +221,10 @@ def main():
     parser.add_argument("--hand", choices=("right", "left"), default="right")
     projects = Path(__file__).resolve().parents[3]
     parser.add_argument("--objective", choices=(*OBJECTIVES, "botyard"), default="dexpilot")
-    parser.add_argument("--botyard-gradient", choices=("finite_difference", "analytic"), default="finite_difference",
+    parser.add_argument("--botyard-gradient", choices=("finite_difference", "analytic"), default="analytic",
                         help="Gradient of the first-stage Botyard hand-shape objective")
+    parser.add_argument("--botyard-shape", choices=("v4_2", "sweep", "direction", "baseline", "phalanx", "thumb_span"), default="v4_2",
+                        help="Botyard pose objective for the entire session")
     parser.add_argument("--smoothing", choices=("one_euro", "off"), default="one_euro")
     parser.add_argument("--assets", type=Path, default=projects / "tendon-spin/assets")
     parser.add_argument("--wuji-root", type=Path, default=projects / "wuji-retargeting")
@@ -238,7 +249,7 @@ def main():
         sys.path.append(str(Path(__file__).resolve().parent / "data/gs_s1_hand_baselines"))
         from botyard_live import BotyardRetargeter
         retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
-                                       gradient=args.botyard_gradient)
+                                       gradient=args.botyard_gradient, shape_model=args.botyard_shape)
     else:
         retargeter = build_constrained(solver, model, args.objective, args)
     device = str(args.video) if args.video else args.camera
@@ -258,12 +269,17 @@ def main():
         node = rclpy.create_node("camera_retargeting", namespace="/gs_s1_preview")
         node.get_logger().info(f"GS S1 {args.hand} hand, {args.objective} objective, "
                                f"landmark smoothing {args.smoothing}, mesh constraints enabled")
+        if args.objective == 'botyard':
+            node.get_logger().info(f'Botyard shape {args.botyard_shape}, gradient {args.botyard_gradient}')
         cleanup.callback(node.destroy_node)
         recording = None
         if args.record_dir:
             from gs_s1_recording import SessionRecorder
             from gs_s1_mujoco import hand_scene_xml
             scene = hand_scene_xml(args.assets, mesh_dir, args.hand)
+            from gs_s1_mano_overlay import add_overlay_asset
+            template = args.mano_model or Path.home() / '.cache/botyard-retargeting/mano' / f'{args.hand}.npz'
+            add_overlay_asset(scene, template)
             recording = SessionRecorder(node, args.record_dir, scene, cleanup)
             recording.wait_for_simulator()
         try:

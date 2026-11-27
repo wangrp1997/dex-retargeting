@@ -35,3 +35,11 @@
 /data/gs_s1_hand_baselines/example_rgb_mano/v3/metrics.json
 /data/gs_s1_hand_baselines/example_rgb_mano/v3_1/
 /data/gs_s1_hand_baselines/example_rgb_mano/v3_weight_sweep/
+
+# Per-frame Botyard v4.2 replay products (retain small version summaries)
+/data/gs_s1_hand_baselines/**/*.jpg
+/data/gs_s1_hand_baselines/**/frames/
+/data/gs_s1_hand_baselines/**/frame_metrics.csv
+/data/gs_s1_hand_baselines/**/retargeting.jsonl
+/data/gs_s1_hand_baselines/**/sim_states.jsonl
+/data/gs_s1_hand_baselines/**/scene.xml

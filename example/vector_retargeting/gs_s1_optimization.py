@@ -82,6 +82,7 @@ class ConstrainedRetargeter:
         self.minimizer.set_ftol_abs(1e-6)
         self.minimizer.set_maxeval(40)
         self.held = 0
+        self.fallbacks = 0
 
     def palm_inequalities(self, result, x, grad):
         if self.exact_palm:
@@ -133,28 +134,83 @@ class ConstrainedRetargeter:
 
         return self.solve_objective(obj, dt)
 
-    def solve_objective(self, obj, dt, *, initial=None):
-        """Minimize a retargeting objective under the same GS S1 constraints."""
+    def solve_objective(self, obj, dt, *, initial=None, fixed=None):
+        """Minimize under GS S1 constraints, optionally fixing actuator indices.
+
+        Fixed targets retain the full-frame velocity allowance when a retry
+        reduces the step radius of the remaining optimized coordinates.
+        """
         self.geom.update(self.last)
         self.palm_gaps, self.palm_slopes = self.palm.linearize(self.geom.data, self.geom.mapping)
         self.exact_palm = False
         step = self.speed * dt
-        self.minimizer.set_min_objective(obj)
+        fixed = {} if fixed is None else fixed
+        indices = np.array(list(fixed), dtype=int)
+        values = np.array(list(fixed.values()), dtype=float)
+        if len(indices):
+            if (indices < 0).any() or (indices >= len(self.last)).any() or not np.isfinite(values).all():
+                raise ValueError('Invalid fixed actuator targets')
+            lower = np.maximum(self.limits[:, 0], self.last - step)
+            upper = np.minimum(self.limits[:, 1], self.last + step)
+            if (values < lower[indices] - 1e-7).any() or (values > upper[indices] + 1e-7).any():
+                self.held += 1
+                return self.full_pose(self.last)
+        free = np.setdiff1d(np.arange(len(self.last)), indices)
+        optimizer = self.minimizer
+        if len(indices):
+            # Optimize only the free coordinates. Equal bounds in the full
+            # SLSQP system leave many zero constraint columns and can fail.
+            template = self.last.copy()
+            template[indices] = values
+
+            def expand(z):
+                x = template.copy()
+                x[free] = z
+                return x
+
+            def reduced_objective(z, grad):
+                slope = np.empty_like(self.last) if grad.size else np.empty(0)
+                value = obj(expand(z), slope)
+                if grad.size:
+                    grad[:] = slope[free]
+                return value
+
+            def constraint(callback, count):
+                def reduced(result, z, grad):
+                    slope = np.empty((count, len(self.last))) if grad.size else np.empty((0, 0))
+                    callback(result, expand(z), slope)
+                    if grad.size:
+                        grad[:] = slope[:, free]
+                return reduced
+
+            optimizer = nlopt.opt(nlopt.LD_SLSQP, len(free))
+            optimizer.add_inequality_mconstraint(constraint(self.geom.inequalities, self.geom.count),
+                                                 [1e-8] * self.geom.count)
+            optimizer.add_inequality_mconstraint(constraint(self.palm_inequalities, len(self.palm.pairs)),
+                                                 [1e-8] * len(self.palm.pairs))
+            optimizer.set_ftol_abs(self.minimizer.get_ftol_abs())
+            optimizer.set_maxeval(self.minimizer.get_maxeval())
+            optimizer.set_min_objective(reduced_objective)
+        else:
+            optimizer.set_min_objective(obj)
         # A plane tangent to the palm gap can repeatedly admit an infeasible
         # thumb pose, even for a small step. Re-evaluate the actual gap inside
         # SLSQP on retry so unrelated finger joints can keep moving.
         for radius in (step, step * .5, step * .25):
             lower = np.maximum(self.limits[:, 0], self.last - radius)
             upper = np.minimum(self.limits[:, 1], self.last + radius)
-            self.minimizer.set_lower_bounds(lower)
-            self.minimizer.set_upper_bounds(upper)
+            lower[indices] = upper[indices] = values
+            optimizer.set_lower_bounds(lower[free])
+            optimizer.set_upper_bounds(upper[free])
             # SLSQP accepts a seed outside nonlinear constraints. Clipping a
             # nearby reference to velocity limits can introduce a tiny mesh
             # overlap. Let the optimizer repair it before checking the command.
             start = self.last if initial is None else np.clip(initial, lower, upper)
             try:
-                candidate = self.minimizer.optimize(start)
-            except nlopt.RoundoffLimited:
+                candidate = optimizer.optimize(start[free])
+                if len(indices):
+                    candidate = expand(candidate)
+            except (nlopt.RoundoffLimited, RuntimeError):
                 continue
             if not np.isfinite(candidate).all() or not self.geom.feasible(candidate):
                 continue
@@ -163,6 +219,17 @@ class ConstrainedRetargeter:
                 break
             self.exact_palm = True
         else:
+            if len(indices) and initial is not None:
+                # The first-stage pose is already a useful feasible command.
+                # Preserve its fixed bends/fingers if base-only refinement fails.
+                fallback = np.clip(initial, np.maximum(self.limits[:, 0], self.last - step),
+                                   np.minimum(self.limits[:, 1], self.last + step))
+                fallback[indices] = values
+                if (self.geom.feasible(fallback)
+                        and self.palm.clear(self.geom.data, self.geom.clearance - 1e-7)):
+                    self.last = fallback.copy()
+                    self.fallbacks += 1
+                    return self.full_pose(self.last)
             self.held += 1
         return self.full_pose(self.last)
 

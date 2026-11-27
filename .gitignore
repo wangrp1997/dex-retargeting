@@ -27,3 +27,19 @@ logs/
 MUJOCO_LOG.TXT
 MANO*.pkl
 mano_v1_2/
+
+# Local test caches, model/trajectory binaries, and validation runs
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.npz
+*.npy
+*.pt
+*.pth
+*.bag
+*.mcap
+/recordings/
+/diagnostics/
+/validation_runs/

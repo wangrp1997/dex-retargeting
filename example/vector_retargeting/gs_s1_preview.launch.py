@@ -23,12 +23,13 @@ def start_preview(context):
     src = example.parents[1] / "src"
     backend = LaunchConfiguration("backend").perform(context)
     hand = LaunchConfiguration("hand").perform(context)
+    botyard = LaunchConfiguration("objective").perform(context) == "botyard"
     share = Path(get_package_share_directory("dexhand_description"))
     video = LaunchConfiguration("video").perform(context)
     input_args = ["--video", video] if video else ["--camera", LaunchConfiguration("camera")]
     record_dir = LaunchConfiguration("record_dir").perform(context)
     if record_dir:
-        if backend != "mujoco" or LaunchConfiguration("objective").perform(context) != "botyard":
+        if backend != "mujoco" or not botyard:
             raise ValueError("Recording requires backend:=mujoco and objective:=botyard")
         input_args.extend(["--record-dir", record_dir])
     input_args.extend(["--hand", hand])
@@ -38,20 +39,25 @@ def start_preview(context):
                        "--wuji-root", LaunchConfiguration("wuji_root"),
                        "--tsinghua-root", LaunchConfiguration("tsinghua_root")])
     tracker_env = {"PYTHONPATH": os.pathsep.join([str(src), os.environ.get("PYTHONPATH", "")])}
-    if LaunchConfiguration("objective").perform(context) == "botyard":
+    if botyard:
         tracker_env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
         input_args.extend(["--botyard-gradient", LaunchConfiguration("botyard_gradient")])
+        input_args.extend(["--botyard-shape", LaunchConfiguration("botyard_shape")])
         mano_model = LaunchConfiguration("mano_model").perform(context)
         if mano_model:
             input_args.extend(["--mano-model", mano_model])
     if not IfCondition(LaunchConfiguration("show_camera")).evaluate(context):
         input_args.append("--no-camera-window")
     if backend == "mujoco":
+        overlay_args = []
+        if botyard:
+            template = mano_model or str(Path.home() / '.cache/botyard-retargeting/mano' / f'{hand}.npz')
+            overlay_args = ["--overlay-template", template]
         input_args.append("--no-target-collision-overlay")
         model = ExecuteProcess(
             cmd=[LaunchConfiguration("mujoco_python"), str(example / "gs_s1_mujoco.py"),
                  "--assets", LaunchConfiguration("mujoco_assets"), "--hand", hand,
-                 "--mesh-dir", str(share / "meshes/gs_s1"), *(["--record-view"] if record_dir else [])],
+                 "--mesh-dir", str(share / "meshes/gs_s1"), *overlay_args, *(["--record-view"] if record_dir else [])],
             output="screen",
             on_exit=[EmitEvent(event=Shutdown(reason="MuJoCo viewer closed"))],
         )
@@ -85,7 +91,8 @@ def generate_launch_description():
         DeclareLaunchArgument("backend", default_value="rviz", choices=["rviz", "mujoco"]),
         DeclareLaunchArgument("hand", default_value="right", choices=["right", "left"]),
         DeclareLaunchArgument("objective", default_value="dexpilot", choices=["dexpilot", "wuji", "vector", "tsinghua", "botyard"]),
-        DeclareLaunchArgument("botyard_gradient", default_value="finite_difference", choices=["finite_difference", "analytic"]),
+        DeclareLaunchArgument("botyard_gradient", default_value="analytic", choices=["finite_difference", "analytic"]),
+        DeclareLaunchArgument("botyard_shape", default_value="v4_2", choices=["v4_2", "sweep", "direction", "baseline", "phalanx", "thumb_span"]),
         DeclareLaunchArgument("smoothing", default_value="one_euro", choices=["one_euro", "off"]),
         DeclareLaunchArgument("wuji_root", default_value=str(projects / "wuji-retargeting")),
         DeclareLaunchArgument("tsinghua_root", default_value=str(projects / "tsinghua-retargeting")),

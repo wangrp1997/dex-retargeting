@@ -16,6 +16,7 @@ from ament_index_python.packages import get_package_share_directory
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from gs_s1_palm import PalmDistances
+from gs_s1_mano_overlay import ManoOverlay, add_overlay_asset
 
 
 @lru_cache(maxsize=2)
@@ -92,8 +93,10 @@ def hand_scene_xml(assets, mesh_dir, side):
     return root
 
 
-def load_hand(assets, mesh_dir, side):
+def load_hand(assets, mesh_dir, side, overlay_template=None):
     root = hand_scene_xml(assets, mesh_dir, side)
+    if overlay_template is not None:
+        add_overlay_asset(root, overlay_template)
     model = mujoco.MjModel.from_xml_string(ET.tostring(root, encoding="unicode"))
     model.geom_margin[:] = .001  # engage soft contact before the mesh surfaces intersect
     return model
@@ -163,6 +166,7 @@ class HandSimulation:
         self.model = model
         self.physics = ContactStepper(model)
         self.data = self.physics.data
+        self.command_stamp_ns = None
         self.drives = [model.joint(j).name for j in model.actuator_trnid[:, 0]]
         passive = {f"{finger}J1" for finger in ("FF", "MF", "RF", "LF")}
         joints = [model.joint(i).name for i in range(model.njnt)]
@@ -182,6 +186,8 @@ class HandSimulation:
         target = [values[name] for name in self.drives]
         if np.isfinite(target).all():
             self.data.ctrl[:] = np.clip(target, *self.model.actuator_ctrlrange.T)
+            stamp = msg.header.stamp
+            self.command_stamp_ns = stamp.sec * 10**9 + stamp.nanosec
 
     def advance(self, steps):
         self.physics.advance(steps)
@@ -190,7 +196,7 @@ class HandSimulation:
         self.publisher.publish(self.state)
 
 
-def publish_recording_state(node, publisher, viewer, display):
+def publish_recording_state(node, publisher, viewer, display, hand, overlay_pose):
     if not publisher.get_subscription_count():
         return
     stamp = node.get_clock().now().nanoseconds
@@ -203,16 +209,35 @@ def publish_recording_state(node, publisher, viewer, display):
             camera['orthographic'] = cam.orthographic
         options = {key: getattr(viewer.opt, key).tolist() for key in ('geomgroup', 'sitegroup', 'flags')}
     # Capture the state that was just drawn, including all four passive J1s.
-    state = dict(stamp_ns=stamp, qpos=display.qpos.tolist(), camera=camera, options=options)
+    state = dict(stamp_ns=stamp, qpos=display.qpos.tolist(), camera=camera, options=options,
+                 applied_command_stamp_ns=hand.command_stamp_ns, ctrl_joint_names=hand.drives,
+                 ctrl_rad=display.ctrl.tolist(), rejected_steps_total=hand.physics.rejected)
+    if overlay_pose:
+        state['mano_overlay_pose'] = overlay_pose
     publisher.publish(String(data=json.dumps(state, separators=(',', ':'))))
 
 
-def run_viewer(node, model, side, record_view=False):
+def run_viewer(node, model, side, record_view=False, mano_overlay=False):
     hand = HandSimulation(node, model)
     display = mujoco.MjData(model)
     mujoco.mj_forward(model, display)
     publisher = node.create_publisher(String, 'record_state', 1) if record_view else None
-    with mujoco.viewer.launch_passive(model, display, show_left_ui=False,
+    overlay = ManoOverlay(model) if mano_overlay else None
+    enabled = False
+    latest = uploaded = ''
+
+    def receive_pose(msg):
+        nonlocal latest
+        latest = msg.data
+
+    def key_pressed(key):
+        nonlocal enabled
+        if key == ord('N'):
+            enabled = not enabled
+
+    if overlay:
+        node.create_subscription(String, 'mano_overlay_pose', receive_pose, 1)
+    with mujoco.viewer.launch_passive(model, display, key_callback=key_pressed if overlay else None, show_left_ui=False,
                                       show_right_ui=False) as viewer:
         with viewer.lock():
             viewer.cam.lookat[:] = [0, 0, .23]
@@ -224,18 +249,37 @@ def run_viewer(node, model, side, record_view=False):
         steps = max(1, round(1 / (60 * model.opt.timestep)))
         period = steps * model.opt.timestep
         deadline = monotonic()
+        label = None
         while rclpy.ok() and viewer.is_running():
             rclpy.spin_once(node, timeout_sec=0.0)
             hand.advance(steps)
+            visible = enabled
+            pose = latest if visible else ''
+            refresh = bool(pose and pose != uploaded)
             with viewer.lock():
                 display.time = hand.data.time
                 display.qpos[:] = hand.data.qpos
                 display.qvel[:] = hand.data.qvel
                 display.ctrl[:] = hand.data.ctrl
                 mujoco.mj_forward(model, display)
+                if overlay:
+                    overlay.set_visible(bool(pose))
+                    viewer.user_scn.ngeom = 0
+                    if refresh:
+                        overlay.update_vertices(pose)
+                    if pose:
+                        overlay.draw(viewer.user_scn, display)
+            if refresh:
+                viewer.update_mesh(overlay.mesh_id)  # takes its own viewer lock
+                uploaded = pose
+            if overlay:
+                status = 'cyan MANO / orange GS S1' if pose else ('waiting for hand' if visible else 'off')
+                if status != label:
+                    viewer.set_texts((None, mujoco.mjtGridPos.mjGRID_BOTTOMLEFT, f'N: MANO overlay | {status}', ''))
+                    label = status
             viewer.sync()
             if publisher is not None:
-                publish_recording_state(node, publisher, viewer, display)
+                publish_recording_state(node, publisher, viewer, display, hand, pose)
             deadline = max(deadline + period, monotonic())
             sleep(max(0.0, deadline - monotonic()))
 
@@ -246,12 +290,13 @@ def main():
     parser.add_argument("--mesh-dir", required=True, type=Path)
     parser.add_argument("--hand", required=True, choices=("right", "left"))
     parser.add_argument("--record-view", action="store_true")
+    parser.add_argument("--overlay-template", type=Path)
     args = parser.parse_args()
-    model = load_hand(args.assets, args.mesh_dir, args.hand)
+    model = load_hand(args.assets, args.mesh_dir, args.hand, args.overlay_template)
     rclpy.init(args=[])
     node = rclpy.create_node("mujoco_hand", namespace="/gs_s1_preview")
     try:
-        run_viewer(node, model, args.hand, args.record_view)
+        run_viewer(node, model, args.hand, args.record_view, args.overlay_template is not None)
     except KeyboardInterrupt:
         pass
     finally:
