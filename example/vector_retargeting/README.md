@@ -23,6 +23,14 @@ The **Botyard** objective fits the selected MANO hand to each frame's 3D detecti
 
 Use `botyard_gradient:=analytic` to test the analytical first-stage gradient with either backend. The default `botyard_gradient:=finite_difference` selects the reference solver.
 
+#### Record the camera and simulated hand together
+
+Close a running preview, then run `./example/vector_retargeting/record_gs_s1.zsh hand:=right camera:=0` from the repository root. Use `hand:=left` for the left hand. Focus the camera window and press **Q** to finish. The script exports H.264 videos to a new timestamped directory under `~/Videos/botyard/` and prints its full path.
+
+`comparison.mp4` shows the clean camera image, MediaPipe skeleton, fitted MANO surface and simulated GS S1 in a 2×2 grid. `human.mp4`, `skeleton.mp4`, `mano.mp4` and `mujoco.mp4` contain the individual views. The three human views use the same processed camera frame. Each frame is paired at camera read time with the latest received MuJoCo joint positions and viewer camera. Missing detections are marked. Camera capture intervals are preserved on export. The simulator is sampled asynchronously and `frames.csv` reports its age in milliseconds for each frame. `sim_states.jsonl` preserves the sampled joint positions, including the passive joints, and the interactive viewing angle.
+
+The physics hand is rendered after capture to keep the live simulator responsive. If export is interrupted, run `MUJOCO_GL=osmesa ~/miniconda3/envs/dex_retargeting/bin/python example/vector_retargeting/gs_s1_recording.py /path/to/session` in the ROS environment to finish the saved session.
+
 The tracker loads a prepared model from `~/.cache/botyard-retargeting/mano/right.npz` or `left.npz` according to `hand`. Both are prepared on the development laptop. On a new machine, run the following once with licensed MANO data and a Python environment that can read the original chumpy pickle. Use `mano_model:=/path/to/model.npz` to override the selected path.
 
 ```zsh

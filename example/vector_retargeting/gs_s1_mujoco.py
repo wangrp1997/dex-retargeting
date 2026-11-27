@@ -1,6 +1,7 @@
 """Drive an upright Botyard GS S1 V3.2 hand from the preview's ROS targets."""
 
 import argparse
+import json
 from functools import lru_cache
 from pathlib import Path
 import subprocess
@@ -13,6 +14,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from gs_s1_palm import PalmDistances
 
 
@@ -188,10 +190,28 @@ class HandSimulation:
         self.publisher.publish(self.state)
 
 
-def run_viewer(node, model, side):
+def publish_recording_state(node, publisher, viewer, display):
+    if not publisher.get_subscription_count():
+        return
+    stamp = node.get_clock().now().nanoseconds
+    with viewer.lock():
+        cam = viewer.cam
+        camera = {name: getattr(cam, name) for name in ('distance', 'azimuth', 'elevation',
+                                                         'fixedcamid', 'trackbodyid', 'type')}
+        camera['lookat'] = cam.lookat.tolist()
+        if hasattr(cam, 'orthographic'):
+            camera['orthographic'] = cam.orthographic
+        options = {key: getattr(viewer.opt, key).tolist() for key in ('geomgroup', 'sitegroup', 'flags')}
+    # Capture the state that was just drawn, including all four passive J1s.
+    state = dict(stamp_ns=stamp, qpos=display.qpos.tolist(), camera=camera, options=options)
+    publisher.publish(String(data=json.dumps(state, separators=(',', ':'))))
+
+
+def run_viewer(node, model, side, record_view=False):
     hand = HandSimulation(node, model)
     display = mujoco.MjData(model)
     mujoco.mj_forward(model, display)
+    publisher = node.create_publisher(String, 'record_state', 1) if record_view else None
     with mujoco.viewer.launch_passive(model, display, show_left_ui=False,
                                       show_right_ui=False) as viewer:
         with viewer.lock():
@@ -214,6 +234,8 @@ def run_viewer(node, model, side):
                 display.ctrl[:] = hand.data.ctrl
                 mujoco.mj_forward(model, display)
             viewer.sync()
+            if publisher is not None:
+                publish_recording_state(node, publisher, viewer, display)
             deadline = max(deadline + period, monotonic())
             sleep(max(0.0, deadline - monotonic()))
 
@@ -223,12 +245,13 @@ def main():
     parser.add_argument("--assets", required=True, type=Path)
     parser.add_argument("--mesh-dir", required=True, type=Path)
     parser.add_argument("--hand", required=True, choices=("right", "left"))
+    parser.add_argument("--record-view", action="store_true")
     args = parser.parse_args()
     model = load_hand(args.assets, args.mesh_dir, args.hand)
     rclpy.init(args=[])
     node = rclpy.create_node("mujoco_hand", namespace="/gs_s1_preview")
     try:
-        run_viewer(node, model, args.hand)
+        run_viewer(node, model, args.hand, args.record_view)
     except KeyboardInterrupt:
         pass
     finally:

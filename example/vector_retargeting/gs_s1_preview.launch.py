@@ -26,6 +26,11 @@ def start_preview(context):
     share = Path(get_package_share_directory("dexhand_description"))
     video = LaunchConfiguration("video").perform(context)
     input_args = ["--video", video] if video else ["--camera", LaunchConfiguration("camera")]
+    record_dir = LaunchConfiguration("record_dir").perform(context)
+    if record_dir:
+        if backend != "mujoco" or LaunchConfiguration("objective").perform(context) != "botyard":
+            raise ValueError("Recording requires backend:=mujoco and objective:=botyard")
+        input_args.extend(["--record-dir", record_dir])
     input_args.extend(["--hand", hand])
     input_args.extend(["--objective", LaunchConfiguration("objective"),
                        "--smoothing", LaunchConfiguration("smoothing"),
@@ -46,7 +51,7 @@ def start_preview(context):
         model = ExecuteProcess(
             cmd=[LaunchConfiguration("mujoco_python"), str(example / "gs_s1_mujoco.py"),
                  "--assets", LaunchConfiguration("mujoco_assets"), "--hand", hand,
-                 "--mesh-dir", str(share / "meshes/gs_s1")],
+                 "--mesh-dir", str(share / "meshes/gs_s1"), *(["--record-view"] if record_dir else [])],
             output="screen",
             on_exit=[EmitEvent(event=Shutdown(reason="MuJoCo viewer closed"))],
         )
@@ -87,6 +92,7 @@ def generate_launch_description():
         DeclareLaunchArgument("mano_model", default_value="", description="Optional prepared MANO NPZ for the selected hand"),
         DeclareLaunchArgument("camera", default_value="0"),
         DeclareLaunchArgument("video", default_value=""),
+        DeclareLaunchArgument("record_dir", default_value="", description="Session directory created by record_gs_s1.zsh"),
         DeclareLaunchArgument("tracker_python", default_value=(
             str(local_tracker) if local_tracker.is_file() else "python"
         )),

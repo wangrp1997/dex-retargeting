@@ -91,7 +91,7 @@ def build_constrained(solver, model, method, args):
 
 
 def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_camera, hand,
-           smoothing, objective_name):
+           smoothing, objective_name, recording=None):
     publisher = node.create_publisher(JointState, "joint_states", 10)
     message = JointState()
     message.name = WRIST_JOINTS + FINGER_JOINTS  # robot_state_publisher expands mimic joints
@@ -118,6 +118,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
                 break
             raise RuntimeError("Camera stopped returning frames.")
         capture_time = monotonic()
+        if recording is not None:
+            recording.sample_simulator()
         timestamp = frames * interval if interval else capture_time
         dt = interval or min(capture_time - last_frame, .1)
         last_frame = capture_time
@@ -152,6 +154,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             previous_tracking = tracking
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
+        if recording is not None:
+            recording.write_frame(frame, timestamp, detector, landmarks, retargeter.mano, tracking)
         if show_camera:
             lines = []
             mesh_visible = tracking and show_mano and retargeter.mano.draw_overlay(frame)
@@ -186,7 +190,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
                                 .55, color, width, cv2.LINE_AA)
             cv2.imshow(window_title, frame)
             key = cv2.waitKey(1) & 0xff
-            if key in (27, ord("q")):
+            if key in (27, ord("q"), ord("Q")):
                 break
             if key in (ord("m"), ord("M")) and botyard:
                 show_mano = not show_mano
@@ -218,9 +222,12 @@ def main():
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--camera", type=int, default=0, help="OpenCV camera index (default: 0)")
     source.add_argument("--video", type=Path, help="Replay an MP4 instead of using the camera")
+    parser.add_argument("--record-dir", type=Path)
     parser.add_argument("--no-camera-window", action="store_true")
     parser.add_argument("--no-target-collision-overlay", action="store_true")
     args = parser.parse_args()
+    if args.record_dir and args.objective != "botyard":
+        parser.error("--record-dir requires --objective botyard")
     show_camera = not args.no_camera_window
     solver, monitor = build_solver(show_collisions=show_camera and not args.no_target_collision_overlay,
                                   hand=args.hand, objective=args.objective)
@@ -252,9 +259,16 @@ def main():
         node.get_logger().info(f"GS S1 {args.hand} hand, {args.objective} objective, "
                                f"landmark smoothing {args.smoothing}, mesh constraints enabled")
         cleanup.callback(node.destroy_node)
+        recording = None
+        if args.record_dir:
+            from gs_s1_recording import SessionRecorder
+            from gs_s1_mujoco import hand_scene_xml
+            scene = hand_scene_xml(args.assets, mesh_dir, args.hand)
+            recording = SessionRecorder(node, args.record_dir, scene, cleanup)
+            recording.wait_for_simulator()
         try:
             stream(node, capture, solver, retargeter, monitor, detector, args.video is not None,
-                   show_camera, args.hand, args.smoothing, args.objective)
+                   show_camera, args.hand, args.smoothing, args.objective, recording)
         except KeyboardInterrupt:
             pass
 
