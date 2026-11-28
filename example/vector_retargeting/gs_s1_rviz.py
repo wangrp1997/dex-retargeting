@@ -93,6 +93,7 @@ def build_constrained(solver, model, method, args):
 def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_camera, hand,
            smoothing, objective_name, recording=None):
     publisher = node.create_publisher(JointState, "joint_states", 10)
+    tracked_publisher = node.create_publisher(JointState, "tracked_joint_targets", 1)
     message = JointState()
     message.name = WRIST_JOINTS + FINGER_JOINTS  # robot_state_publisher expands mimic joints
     message.position = [0.0] * len(message.name)
@@ -160,6 +161,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             previous_tracking = tracking
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
+        if tracking:
+            tracked_publisher.publish(message)
         if send_overlay:
             payload = encode_pose(trace['mano_joints_wrist_m'], trace['mano_vertices_wrist_m']) if tracking else ''
             overlay_pub.publish(String(data=payload))

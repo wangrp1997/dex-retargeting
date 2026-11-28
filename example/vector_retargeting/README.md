@@ -13,11 +13,25 @@ ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
   backend:=mujoco hand:=right objective:=botyard camera:=0
 ```
 
-Use `backend:=rviz|mujoco`, `hand:=right|left` and `objective:=botyard|dexpilot|wuji|vector|tsinghua` (one value per argument).
-The defaults are `rviz`, `right` and `dexpilot`. Use `video:=/path/to/video.mp4` to replay the same input.
+Use `backend:=rviz|mujoco|hardware`, `hand:=right|left` and `objective:=botyard|dexpilot|wuji|vector|tsinghua` (one value per argument).
+The defaults are `rviz`, `right` and `dexpilot`; the hardware backend defaults to `left` and requires `objective:=botyard`. Use `video:=/path/to/video.mp4` to replay the same input.
 The four landmark objectives apply One Euro smoothing to the wrist-local 3D landmarks before optimization.
 Use `smoothing:=one_euro` (default) or `smoothing:=off` to compare them on the same video.
 The camera overlay shows the original 2D detections. Press **q** in that window to stop.
+
+For the real GS S1 over RS485, use the same entry point with the hardware backend:
+
+```zsh
+ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
+  backend:=hardware hand:=left objective:=botyard camera:=0 \
+  botyard_shape:=v4_2 botyard_gradient:=analytic
+```
+
+This starts the existing `ros2_botyard` default `dexhand_controller`, the Botyard tracker and a position-message relay. The serial device defaults to `/dev/dexhand`; override it with `hardware_port:=/dev/ttyACM0` when needed. `start_hardware:=false` reuses an already running default controller, and `controller_namespace:=lh` selects a namespaced controller. The hardware description uses the same GS S1 sub-version 2 and handedness as the tracker. RS485 runs as the current user without the EtherCAT capability wrapper.
+
+The relay reads the controller's actual `joints` parameter and maps targets by name to its 18-position `Float64MultiArray` protocol. It holds the measured wrist pose, starts finger motion from joint feedback, and limits command changes to the lower of the URDF velocity and the default controller's 1.5708 rad/s. Only `/gs_s1_preview/tracked_joint_targets` drives the relay, so waiting for a hand does not send zero targets. Missing tracked input or hardware feedback stops publication; resumption starts from fresh feedback. Controller speed, effort and tactile defaults remain those of `dexhand_controller`. No recording or video export is started.
+
+The default controller chain was verified with mock hardware in an isolated ROS domain, including nonzero wrist feedback and stale-input stopping. This is software integration verification; real RS485 motion still needs the operator's test.
 
 The **Botyard** objective fits the selected MANO hand to each frame's 3D detections and 2D image points using the previous pose. It uses the template shape and estimates palm scale online. The offline RGB benchmark fits shape and pose jointly across the full recording. The live optimizer uses joint limits, passive couplings and mesh checks. The camera window overlays the translucent cyan MANO surface from the current fit under the MediaPipe skeleton. Press **M** in the camera window to hide or show the surface while retargeting continues. The bottom line shows mesh visibility and mean MANO-plus-solver time. Both backends receive the same joint commands.
 

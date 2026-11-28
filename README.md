@@ -36,7 +36,7 @@
 
 ## Botyard Retargeting v4.2
 
-Select `objective:=botyard` for webcam control of the left or right GS S1 in RViz or MuJoCo. [Camera setup and commands](example/vector_retargeting/README.md#botyard-gs-s1-v32-webcam-preview)
+Select `objective:=botyard` for webcam control of the left or right GS S1 in RViz, MuJoCo or over RS485 using the existing default hardware controller. The hardware backend defaults to the left hand. [Camera setup and commands](example/vector_retargeting/README.md#botyard-gs-s1-v32-webcam-preview)
 
 The default Botyard v4.2 controller first tracks MANO finger directions and bends, then refines the thumb's custom inward-facing preference and distal-surface proximity. Per-digit source-error bounds keep the proximity task from gradually straightening a fist; J4 remains free to follow observed spread. Thumb facing is a weak preference during closure so it can adjust for index opposition. The four passive distal joints follow their respective middle joints.
 
