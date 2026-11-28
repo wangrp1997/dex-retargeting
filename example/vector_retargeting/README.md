@@ -27,9 +27,28 @@ ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
   botyard_shape:=v4_2 botyard_gradient:=analytic
 ```
 
+To run **Botyard v4.3** on the same default controller:
+
+```zsh
+ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
+  backend:=hardware hand:=left objective:=botyard camera:=0 \
+  botyard_opposition:=inward hardware_log:=true
+```
+
+`botyard_opposition:=inward` selects v4.3 and keeps complete distal-link proximity as the first
+task and adds palm-inward thumb facing as a secondary preference. It uses the
+same weight 0.2, three starts and distance protection as the reviewed offline
+comparison. Both the default latest-frame worker and serial pipeline support
+it. Startup, camera, trajectory and timing metadata identify v4.3; `session.json`
+records `algorithm_version` and `botyard_opposition`. This requires `botyard_shape:=v4_2` and
+`objective:=botyard`. No video recording/export starts. Remove the option or set
+`botyard_opposition:=v4_2` to run the unchanged default objective. Hand selection,
+controller speed and effort settings, stale-input stopping and feedback checks
+remain the same. See [v4.3 method, results and limitations](data/gs_s1_hand_baselines/botyard_v4_3/README.md).
+
 This starts the existing `ros2_botyard` default `dexhand_controller`, the Botyard tracker and a position-message relay. The serial device defaults to `/dev/dexhand`; override it with `hardware_port:=/dev/ttyACM0` when needed. `start_hardware:=false` reuses an already running default controller, and `controller_namespace:=lh` selects a namespaced controller. The hardware description uses the same GS S1 sub-version 2 and handedness as the tracker. RS485 runs as the current user without the EtherCAT capability wrapper.
 
-The relay reads the controller's actual `joints` parameter and maps targets by name to its 18-position `Float64MultiArray` protocol. It holds the measured wrist pose, starts finger motion from joint feedback, and limits command changes to the lower of the URDF velocity and the default controller's 1.5708 rad/s. Only `/gs_s1_preview/tracked_joint_targets` drives the relay, so waiting for a hand does not send zero targets. Missing tracked input or hardware feedback stops publication; resumption starts from fresh feedback. Controller speed, effort and tactile defaults remain those of `dexhand_controller`. No recording or video export is started.
+The relay reads the controller's actual `joints` parameter and maps targets by name to its 18-position `Float64MultiArray` protocol. It holds the measured wrist pose, starts finger motion from joint feedback, and limits command changes to the lower of the URDF velocity and the default controller's 1.5708 rad/s. Only `/gs_s1_preview/tracked_joint_targets` drives the relay, so waiting for a hand does not send zero targets. Missing tracked input or hardware feedback stops publication. A target timeout preserves the last output setpoint and pauses the integration clock; the active controller retains that same setpoint. When a fresh target arrives, the relay continues with bounded steps instead of rewinding to delayed hardware feedback. Feedback loss or inactive/expired controller status clears the command history, and the next control session starts from fresh feedback. Controller speed, effort and tactile defaults remain those of `dexhand_controller`. No recording or video export is started.
 
 The default controller chain was verified with mock hardware in an isolated ROS domain, including nonzero wrist feedback and stale-input stopping. This is software integration verification; real RS485 motion still needs the operator's test.
 

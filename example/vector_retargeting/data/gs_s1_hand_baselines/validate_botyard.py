@@ -18,7 +18,6 @@ from distal_closure import DistalClosure
 from gs_s1_mujoco import load_hand
 from gs_s1_rviz import build_solver
 from palm_anchor_experiment import bone_geometry, unit
-from shape_priority_closure import ALGORITHM_VERSION
 
 
 WINDOWS = [('thumb_bend', .35, 1.3), ('index_bend', 1.7, 2.7),
@@ -33,7 +32,7 @@ def direction_error(a, b):
     return np.rad2deg(np.arccos(np.clip(np.sum(unit(a) * unit(b), axis=-1), -1., 1.)))
 
 
-def main():
+def main(*, retargeter_factory=BotyardRetargeter, extra_metrics=None, metadata=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
@@ -43,6 +42,8 @@ def main():
     parser.add_argument('--mano-model', type=Path)
     parser.add_argument('--baseline-controls', type=Path,
                         help='Optional paired controls NPZ with baseline/frame/time_s arrays')
+    parser.add_argument('--baseline-key', choices=('baseline', 'validation'), default='baseline',
+                        help='Select validation when comparing against a saved v4.2 output')
     parser.add_argument('--label', default='replay')
     args = parser.parse_args()
     source = np.load(args.source, allow_pickle=False)
@@ -56,8 +57,8 @@ def main():
     meshes = Path(get_package_share_directory('dexhand_description')) / 'meshes/gs_s1'
     model = (mujoco.MjModel.from_xml_path(str(args.scene)) if args.scene
              else load_hand(args.assets, meshes, args.hand))
-    ret = BotyardRetargeter(build_solver(hand=args.hand, objective='botyard')[0], model, meshes,
-                            args.hand, args.mano_model, 'one_euro', gradient='analytic', shape_model='v4_2')
+    ret = retargeter_factory(build_solver(hand=args.hand, objective='botyard')[0], model, meshes,
+                             args.hand, args.mano_model, 'one_euro', gradient='analytic', shape_model='v4_2')
     solver = ret.output
     closure = ret.protected_closure
     distance = DistalClosure(solver)
@@ -67,7 +68,7 @@ def main():
         np.testing.assert_array_equal(cached['frame'], frames)
         np.testing.assert_array_equal(cached['time_s'], times)
         np.testing.assert_array_equal(cached['joint_names'], solver.opt.target_joint_names)
-        baseline = cached['baseline']
+        baseline = cached[args.baseline_key]
     previous = solver.last.copy()
     commands, references, weights, human_gaps, rows = [], [], [], [], []
     start = perf_counter()
@@ -113,6 +114,9 @@ def main():
         for label, q in [('baseline', baseline[k] if baseline is not None else qref), ('validation', command)]:
             for d, value in enumerate(1000 * distance.distances(q)[0]):
                 row[f'{label}_gap_{d}_mm'] = float(value)
+        if extra_metrics is not None:
+            row.update(extra_metrics(ret, dict(baseline=baseline[k] if baseline is not None else qref,
+                                               validation=command)))
         commands.append(command)
         references.append(qref)
         weights.append(w)
@@ -131,7 +135,7 @@ def main():
                         baseline=baseline if baseline is not None else references,
                         weights=weights, human_gap_mm=human_gaps)
     tracked = [row for row in rows if row['tracking']]
-    report = dict(algorithm='botyard', algorithm_version=ALGORITHM_VERSION, dataset=args.label,
+    report = dict(algorithm='botyard', algorithm_version=ret.algorithm_version, dataset=args.label,
                   frames=n, tracked_frames=int(valid.sum()), elapsed_s=perf_counter() - start,
                   baseline_mean_direction_error_deg=float(np.mean([r['baseline_direction_error_deg'] for r in tracked])),
                   validation_mean_direction_error_deg=float(np.mean([r['validation_direction_error_deg'] for r in tracked])),
@@ -141,6 +145,7 @@ def main():
                   max_velocity_violation_rad=max(r['validation_velocity_violation_rad'] for r in rows),
                   reference_exceptions=[r['frame'] for r in rows if r['reference_exception']],
                   correction_exceptions=[r['frame'] for r in rows if r['correction_exception']],
+                  experiment=metadata,
                   worst_departures=sorted(tracked, key=lambda r: r['max_joint_difference_deg'], reverse=True)[:8],
                   note='All source frames replayed through BotyardRetargeter, shape_model=v4_2. Direction errors score four long fingers only. Thumb facing is an intentional custom soft preference; MANO proximity is not tactile contact truth.')
     if args.label == 'example':

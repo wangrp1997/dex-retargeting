@@ -63,10 +63,26 @@ def test_distal_cache_value_then_gradient_and_independent_finger(geometry, monke
     actual, cached_jac = distance.distances(q, with_gradient=True)
     np.testing.assert_allclose(actual, expected, atol=1e-10)
     np.testing.assert_allclose(cached_jac, jac, atol=1e-8)
+    # A line search may return to an older trial, with another pose in between.
+    # Its Jacobian is reusable, but MuJoCo must still describe the requested q.
+    calls_before = len(calls)
+    earlier = geometry.last.copy()
+    restored, restored_jac = distance.distances(earlier, with_gradient=True)
+    assert len(calls) == calls_before
+    np.testing.assert_array_equal(distance.data.qpos, distance.mapping @ earlier)
+    reference, reference_jac = DistalClosure(geometry).distances(earlier, with_gradient=True)
+    np.testing.assert_array_equal(restored, reference)
+    np.testing.assert_array_equal(restored_jac, reference_jac)
+    restored[:] = -1
+    restored_jac[:] = -1
+    restored, restored_jac = distance.distances(earlier, with_gradient=True)
+    np.testing.assert_array_equal(restored, reference)
+    np.testing.assert_array_equal(restored_jac, reference_jac)
     eps = 1e-6
     numeric = np.column_stack([(distance.distances(q + d)[0] - distance.distances(q - d)[0]) / (2 * eps)
                                for d in eps * np.eye(len(q))])
     np.testing.assert_allclose(cached_jac, numeric, atol=1e-6, rtol=1e-4)
+    assert len(distance.state_cache) <= 32
 
 
 def test_collision_cache_preserves_contacts_and_constraint_slopes(geometry, monkeypatch):

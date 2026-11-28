@@ -1,5 +1,8 @@
 # Botyard v4.2
 
+v4.2 保留为默认回退目标；增加掌内朝向和距离优先任务的版本为
+[Botyard v4.3](../botyard_v4_3/README.md)，使用 `botyard_opposition:=inward` 选择。
+
 算法名称保持 `botyard`。相机入口使用 `objective:=botyard`，当前默认模式为 `botyard_shape:=v4_2`。
 
 真机入口是同一 launch 的 `backend:=hardware`，默认使用左手和 `/dev/dexhand`，调用 `ros2_botyard` 原有 `dexhand_controller`。转接会按关节名称匹配控制器顺序并保持实际腕部位置，等待有效跟踪目标和关节反馈后才下发。无需录制或导出视频，具体命令见上层使用说明。

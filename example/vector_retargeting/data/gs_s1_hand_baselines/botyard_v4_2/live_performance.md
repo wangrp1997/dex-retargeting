@@ -33,6 +33,18 @@ The measurements are in [live_performance.json](live_performance.json).
 Total mean time fell about 7.3%; p95 fell from 206.87 to 188.11 ms. Full mesh
 closure remains the largest solver cost. This does not imply a 30 Hz robot solver.
 
+A further local change on 2026-11-28 retains exact distal gaps and analytic
+Jacobians for up to 32 previously evaluated actuator states. This also reuses
+nonconsecutive trial states revisited by line search. MuJoCo kinematics still
+describe the requested state, and returned arrays cannot modify cached results.
+Against the existing single-pose cache, another paired run of the same 24 inputs
+measured 139.09 to 133.62 ms total mean (3.9% reduction) and 185.39 to 178.86 ms p95.
+This is a small cached-input benchmark, not a measured hardware latency gain.
+Full example/custom/sweep replay produced exactly identical commanded joints
+(621/395/149 frames), with the same source/physical protections and numerical
+fallbacks. The 25 geometry, source-priority and analytic-gradient tests passed.
+Optimizer tolerances, evaluation budgets and objective weights were not changed.
+
 To reproduce on an existing cached observation file, in the sourced ROS workspace:
 
 ```zsh

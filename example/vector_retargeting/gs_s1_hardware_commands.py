@@ -23,10 +23,12 @@ def select_positions(names, positions, required):
 class PositionRelay:
     """Preserve wrist pose and approach named finger targets from feedback.
 
-    Only actively tracked targets enter this relay. Missing input or feedback
-    stops publishing; resumption starts from the new measured pose. The 18-value
-    output uses the controller's actual joints parameter and its default motion
-    settings. The relay adds no gesture classification or calibration.
+    Only actively tracked targets enter this relay. Missing targets suspend
+    publication while retaining the last output setpoint, which the active
+    controller also retains. Delayed feedback must not rewind that setpoint on
+    resumption. Feedback or controller loss resets the output history, so a new
+    control session starts from the measured pose. The 18-value output uses the
+    controller's actual joint order and default motion settings.
     """
 
     def __init__(self, joints, limits, *, target_timeout=.5, feedback_timeout=1., max_velocity=1.5708):
@@ -62,10 +64,15 @@ class PositionRelay:
         self.target, self.target_time = target, now
 
     def step(self, now):
-        if (self.feedback is None or self.target is None
-                or not 0 <= now - self.target_time <= self.target_timeout
+        if (self.feedback is None
                 or not 0 <= now - self.feedback_time <= self.feedback_timeout):
             self.reset()
+            return None
+        if self.target is None or not 0 <= now - self.target_time <= self.target_timeout:
+            # A target timeout does not deactivate the controller: its held
+            # setpoint remains our last output, not the delayed measured pose.
+            # Pause the integration clock too, so silence earns no larger step.
+            self.last_time = now
             return None
         if self.command is None:
             self.command = self.feedback.copy()

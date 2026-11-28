@@ -12,6 +12,8 @@ from launch.actions import (
     GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
+    PopEnvironment,
+    PushEnvironment,
     SetEnvironmentVariable,
 )
 from launch.events import Shutdown
@@ -20,12 +22,29 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EqualsSubstitution, IfElseSubstitution, LaunchConfiguration
 
 
+def traced_bringup(bringup, preload, trace_file, sdk):
+    # Humble TimerAction retains locals, but not launch-configuration scopes.
+    # The default bringup's delayed controller spawner still needs namespace
+    # after the include returns. Scope only the process environment here.
+    return GroupAction([
+        PushEnvironment(),
+        SetEnvironmentVariable('LD_PRELOAD', preload),
+        SetEnvironmentVariable('BOTYARD_IO_TRACE_FILE', str(trace_file)),
+        SetEnvironmentVariable('BOTYARD_IO_TRACE_SDK', str(sdk)),
+        bringup,
+        PopEnvironment(),
+    ], scoped=False)
+
+
 def start_preview(context):
     example = Path(__file__).resolve().parent
     src = example.parents[1] / "src"
     backend = LaunchConfiguration("backend").perform(context)
     hand = LaunchConfiguration("hand").perform(context)
     botyard = LaunchConfiguration("objective").perform(context) == "botyard"
+    opposition = LaunchConfiguration('botyard_opposition').perform(context)
+    if opposition == 'inward' and (not botyard or LaunchConfiguration('botyard_shape').perform(context) != 'v4_2'):
+        raise ValueError('botyard_opposition:=inward requires objective:=botyard and botyard_shape:=v4_2')
     share = Path(get_package_share_directory("dexhand_description"))
     video = LaunchConfiguration("video").perform(context)
     input_args = ["--video", video] if video else ["--camera", LaunchConfiguration("camera")]
@@ -53,6 +72,7 @@ def start_preview(context):
         tracker_env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
         input_args.extend(["--botyard-gradient", LaunchConfiguration("botyard_gradient")])
         input_args.extend(["--botyard-shape", LaunchConfiguration("botyard_shape")])
+        input_args.extend(['--botyard-opposition', opposition])
         input_args.extend(['--live-pipeline', LaunchConfiguration('live_pipeline')])
         mano_model = LaunchConfiguration("mano_model").perform(context)
         if mano_model:
@@ -84,11 +104,7 @@ def start_preview(context):
                 spec.loader.exec_module(tracer)
                 trace_session, library, sdk = tracer.prepare_trace(LaunchConfiguration('hardware_log_dir').perform(context))
                 preload = str(library) + (':' + context.environment['LD_PRELOAD'] if context.environment.get('LD_PRELOAD') else '')
-                startup.append(GroupAction([
-                    SetEnvironmentVariable('LD_PRELOAD', preload),
-                    SetEnvironmentVariable('BOTYARD_IO_TRACE_FILE', str(trace_session / 'io_trace.jsonl')),
-                    SetEnvironmentVariable('BOTYARD_IO_TRACE_SDK', str(sdk)), bringup,
-                ], scoped=True))
+                startup.append(traced_bringup(bringup, preload, trace_session / 'io_trace.jsonl', sdk))
             else:
                 startup.append(bringup)
         input_args.append('--no-target-collision-overlay')
@@ -100,7 +116,9 @@ def start_preview(context):
             input_args.append('--publish-timing')
         model = ExecuteProcess(
             cmd=[LaunchConfiguration('tracker_python'), str(example / 'gs_s1_hardware.py'),
-                 '--hand', hand, '--controller-namespace', namespace, *log_args],
+                 '--hand', hand, '--controller-namespace', namespace,
+                 '--botyard-opposition', opposition,
+                 '--botyard-shape', LaunchConfiguration('botyard_shape'), *log_args],
             output='screen',
             on_exit=[EmitEvent(event=Shutdown(reason='Hardware relay closed'))],
         )
@@ -151,6 +169,8 @@ def generate_launch_description():
         DeclareLaunchArgument("objective", default_value="dexpilot", choices=["dexpilot", "wuji", "vector", "tsinghua", "botyard"]),
         DeclareLaunchArgument("botyard_gradient", default_value="analytic", choices=["finite_difference", "analytic"]),
         DeclareLaunchArgument("botyard_shape", default_value="v4_2", choices=["v4_2", "sweep", "direction", "baseline", "phalanx", "thumb_span"]),
+        DeclareLaunchArgument('botyard_opposition', default_value='v4_2', choices=['v4_2', 'inward'],
+                              description='Explicitly select full-link inward opposition guidance'),
         DeclareLaunchArgument("smoothing", default_value="one_euro", choices=["one_euro", "off"]),
         DeclareLaunchArgument('live_pipeline', default_value='latest', choices=['latest', 'serial'],
                               description='Botyard webcam scheduling; video and recording stay synchronized'),

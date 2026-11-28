@@ -11,6 +11,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 
 from gs_s1_filter import LandmarkFilter
+from gs_s1_botyard_version import botyard_version
 from gs_s1_live_pipeline import LatestCamera, LiveRetargeting, SolverProcess
 from gs_s1_mano_overlay import encode_pose
 from gs_s1_rviz import FINGER_JOINTS, MANO_TO_GS_S1, WRIST_JOINTS
@@ -29,6 +30,8 @@ def stream_live(node, capture, solver, mano, monitor, detector, show_camera, con
 
     def timing(**fields):
         if timing_pub is not None:
+            fields['botyard_opposition'] = config.opposition
+            fields['algorithm_version'] = botyard_version(config.opposition)
             timing_pub.publish(String(data=json.dumps(fields, allow_nan=False, separators=(',', ':'))))
     message = JointState()
     message.name = WRIST_JOINTS + FINGER_JOINTS
@@ -42,7 +45,9 @@ def stream_live(node, capture, solver, mano, monitor, detector, show_camera, con
     frames = tracked = 0
     vision_seconds = solve_seconds = 0.
     last_solve = command_time = None
-    title = f'GS S1 - {config.hand} - Botyard'
+    title = f'GS S1 - {config.hand} - Botyard v{botyard_version(config.opposition)}'
+    if config.opposition == 'inward':
+        title += ' - inward'
     node.get_logger().info('Latest-frame camera/MANO preview; independent Botyard solver, no input backlog')
 
     with ExitStack() as cleanup:

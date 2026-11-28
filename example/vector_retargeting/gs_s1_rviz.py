@@ -19,6 +19,7 @@ from dex_retargeting.retargeting_config import RetargetingConfig
 from gs_s1_calibration import FingerRootCalibration
 from gs_s1_contact import CollisionMonitor
 from gs_s1_filter import LandmarkFilter
+from gs_s1_botyard_version import botyard_version
 from gs_s1_mujoco import hand_urdf, load_hand
 from gs_s1_optimization import ConstrainedRetargeter, load_wuji
 from gs_s1_tsinghua import TsinghuaObjective
@@ -117,6 +118,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
     previous_tracking = None
     display_name = {"dexpilot": "DexPilot", "wuji": "Wuji", "botyard": "Botyard"}.get(objective_name, objective_name.title())
     window_title = f"GS S1 - {hand} - {display_name}"
+    if botyard and getattr(retargeter, 'opposition', 'v4_2') == 'inward':
+        window_title += ' - inward'
     solve_seconds = 0.
     while rclpy.ok():
         start = monotonic()
@@ -243,6 +246,8 @@ def main():
                         help="Gradient of the first-stage Botyard hand-shape objective")
     parser.add_argument("--botyard-shape", choices=("v4_2", "sweep", "direction", "baseline", "phalanx", "thumb_span"), default="v4_2",
                         help="Botyard pose objective for the entire session")
+    parser.add_argument('--botyard-opposition', choices=('v4_2', 'inward'), default='v4_2',
+                        help='Optional full-link distance priority and inward-facing guidance')
     parser.add_argument("--smoothing", choices=("one_euro", "off"), default="one_euro")
     parser.add_argument("--assets", type=Path, default=projects / "tendon-spin/assets")
     parser.add_argument("--wuji-root", type=Path, default=projects / "wuji-retargeting")
@@ -258,6 +263,8 @@ def main():
     parser.add_argument("--no-camera-window", action="store_true")
     parser.add_argument("--no-target-collision-overlay", action="store_true")
     args = parser.parse_args()
+    if args.botyard_opposition == 'inward' and (args.objective != 'botyard' or args.botyard_shape != 'v4_2'):
+        parser.error('--botyard-opposition inward requires --objective botyard --botyard-shape v4_2')
     if args.record_dir and args.objective != "botyard":
         parser.error("--record-dir requires --objective botyard")
     show_camera = not args.no_camera_window
@@ -270,17 +277,19 @@ def main():
     if args.objective == "botyard":
         # Import the same two objectives as the offline benchmark, only when selected.
         sys.path.append(str(Path(__file__).resolve().parent / "data/gs_s1_hand_baselines"))
-        from botyard_live import BotyardRetargeter, OnlineMano
+        from botyard_live import make_botyard_retargeter, OnlineMano
         if latest_live:
             from gs_s1_live_pipeline import SolverConfig
             live_config = SolverConfig(str(args.assets), args.hand, str(args.mano_model) if args.mano_model else None,
-                                       args.smoothing, args.botyard_gradient, args.botyard_shape)
+                                       args.smoothing, args.botyard_gradient, args.botyard_shape,
+                                       opposition=args.botyard_opposition)
             mano = OnlineMano(args.mano_model or Path.home() / '.cache/botyard-retargeting/mano' / f'{args.hand}.npz',
                               thumb_direction_fit=args.botyard_shape in ('v4_2', 'sweep'))
             retargeter = None
         else:
-            retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
-                                           gradient=args.botyard_gradient, shape_model=args.botyard_shape)
+            retargeter = make_botyard_retargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
+                                                gradient=args.botyard_gradient, shape_model=args.botyard_shape,
+                                                opposition=args.botyard_opposition)
     else:
         retargeter = build_constrained(solver, model, args.objective, args)
     device = str(args.video) if args.video else args.camera
@@ -301,7 +310,9 @@ def main():
         node.get_logger().info(f"GS S1 {args.hand} hand, {args.objective} objective, "
                                f"landmark smoothing {args.smoothing}, mesh constraints enabled")
         if args.objective == 'botyard':
-            node.get_logger().info(f'Botyard shape {args.botyard_shape}, gradient {args.botyard_gradient}')
+            version = botyard_version(args.botyard_opposition) if args.botyard_shape == 'v4_2' else 'historical'
+            node.get_logger().info(f'Botyard v{version}, shape {args.botyard_shape}, gradient {args.botyard_gradient}, '
+                                   f'opposition {args.botyard_opposition}')
         cleanup.callback(node.destroy_node)
         recording = None
         if args.record_dir:

@@ -22,6 +22,8 @@ imgui.ini
 *.avi
 *.mov
 *.mkv
+*.m4v
+*.webm
 *.log
 logs/
 MUJOCO_LOG.TXT
@@ -43,3 +45,13 @@ htmlcov/
 /recordings/
 /diagnostics/
 /validation_runs/
+/videos/
+/bags/
+/rosbag2_*/
+
+# Local downloads and backup archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z

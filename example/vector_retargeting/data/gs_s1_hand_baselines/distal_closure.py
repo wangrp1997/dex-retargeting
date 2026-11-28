@@ -1,4 +1,6 @@
 """Continuous closure assistance between the complete distal surfaces of a hand."""
+from collections import OrderedDict
+
 import numpy as np
 import mujoco
 from pinocchio import hppfcl
@@ -62,6 +64,10 @@ class DistalClosure:
         # A value query and its subsequent Jacobian query often use identical
         # link poses. Reuse exact triangle witnesses, never nearby-pose gaps.
         self.pose_cache = [None] * (len(self.ids) - 1)
+        # SLSQP also revisits earlier trial states during line search/retries.
+        # Bound memory and retain their exact values/Jacobians, rather than
+        # repeating four triangle searches after an intervening trial pose.
+        self.state_cache = OrderedDict()
         self.have_kinematics = self.have_com = False
         self.request = hppfcl.DistanceRequest()
         self.request.enable_nearest_points = True
@@ -82,6 +88,12 @@ class DistalClosure:
         if with_gradient and not self.have_com:
             mujoco.mj_comPos(self.model, self.data)
             self.have_com = True
+        key_state = qpos.tobytes()
+        cached_state = self.state_cache.get(key_state)
+        if cached_state is not None:
+            self.state_cache.move_to_end(key_state)
+            gaps, jac = cached_state
+            return gaps.copy(), jac.copy() if with_gradient else None
         transforms = [hppfcl.Transform3f(self.data.xmat[i].reshape(3, 3), self.data.xpos[i])
                       for i in self.ids]
         gaps = np.empty(4)
@@ -123,6 +135,10 @@ class DistalClosure:
                     mujoco.mj_jac(self.model, self.data, self.jac_a, None, a, self.ids[0])
                     mujoco.mj_jac(self.model, self.data, self.jac_b, None, b, self.ids[digit])
                     jac[pair] = ((b-a) / distance) @ (self.jac_b-self.jac_a) @ self.mapping
+        if with_gradient:
+            self.state_cache[key_state] = gaps.copy(), jac.copy()
+            if len(self.state_cache) > 32:
+                self.state_cache.popitem(last=False)
         return gaps, jac
 
     def objective(self, reference, weights, target=None, *, motion=None, thumb_pose_loss=None):

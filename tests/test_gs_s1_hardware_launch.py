@@ -22,7 +22,8 @@ def context(module, backend, **overrides):
     from launch import LaunchContext
     from launch.actions import DeclareLaunchArgument
     result = LaunchContext()
-    result.launch_configurations.update(backend=backend, objective='botyard', **overrides)
+    result.launch_configurations.update(backend=backend, objective='botyard')
+    result.launch_configurations.update(overrides)
     for entity in module.generate_launch_description().entities:
         if isinstance(entity, DeclareLaunchArgument):
             entity.execute(result)
@@ -80,6 +81,24 @@ def test_hardware_logging_is_opt_in_and_wires_both_processes(launch_module, tmp_
     assert '--record-dir' not in tracker_cmd
 
 
+@pytest.mark.parametrize('mode', ['v4_2', 'inward'])
+def test_opposition_selection_reaches_tracker_and_log_metadata(launch_module, mode):
+    from launch.utilities import perform_substitutions
+    ctx = context(launch_module, 'hardware', start_hardware='false', botyard_opposition=mode)
+    relay, tracker = launch_module.start_preview(ctx)
+    for action in (relay, tracker):
+        cmd = [perform_substitutions(ctx, arg) for arg in action.cmd]
+        assert cmd[cmd.index('--botyard-opposition') + 1] == mode
+    assert context(launch_module, 'hardware').launch_configurations['botyard_opposition'] == 'v4_2'
+
+
+@pytest.mark.parametrize('overrides', [dict(objective='dexpilot'), dict(botyard_shape='sweep')])
+def test_inward_rejects_incompatible_objective_before_bringup(launch_module, overrides):
+    ctx = context(launch_module, 'hardware', botyard_opposition='inward', **overrides)
+    with pytest.raises(ValueError, match='requires objective:=botyard and botyard_shape:=v4_2'):
+        launch_module.start_preview(ctx)
+
+
 def test_hardware_log_rejects_simulation_backend(launch_module):
     with pytest.raises(ValueError, match='hardware_log requires'):
         launch_module.start_preview(context(launch_module, 'mujoco', hardware_log='true'))
@@ -106,3 +125,32 @@ def test_io_trace_is_scoped_to_hardware_bringup(launch_module, tmp_path):
     assert directory.parent == tmp_path
     assert directory.is_dir()
     assert '--log-session-dir' not in [perform_substitutions(ctx, arg) for arg in tracker.cmd]
+
+
+def test_delayed_spawner_retains_namespace_after_trace_environment_is_restored(launch_module):
+    from launch import LaunchDescription, LaunchDescriptionSource, LaunchService
+    from launch.actions import IncludeLaunchDescription, OpaqueFunction, TimerAction
+    from launch.substitutions import LaunchConfiguration
+    observed = []
+
+    def immediate(ctx):
+        observed.append(('immediate', LaunchConfiguration('namespace').perform(ctx),
+                         ctx.environment.get('BOTYARD_IO_TRACE_FILE')))
+
+    def delayed(ctx):
+        # Reproduce the default bringup's TimerAction, after the surrounding
+        # environment has been popped. This used to lose namespace entirely.
+        observed.append(('delayed', LaunchConfiguration('namespace').perform(ctx),
+                         ctx.environment.get('BOTYARD_IO_TRACE_FILE')))
+
+    include = IncludeLaunchDescription(LaunchDescriptionSource(LaunchDescription([
+        OpaqueFunction(function=immediate),
+        TimerAction(period=.01, actions=[OpaqueFunction(function=delayed)]),
+    ])), launch_arguments={'namespace': 'botyard_delayed_test'}.items())
+    service = LaunchService()
+    previous_trace_file = service.context.environment.get('BOTYARD_IO_TRACE_FILE')
+    service.include_launch_description(LaunchDescription([
+        launch_module.traced_bringup(include, '/tmp/unused-preload.so', '/tmp/test-io.jsonl', '/tmp/unused-sdk.so')]))
+    assert service.run() == 0
+    assert observed == [('immediate', 'botyard_delayed_test', '/tmp/test-io.jsonl'),
+                        ('delayed', 'botyard_delayed_test', previous_trace_file)]

@@ -69,6 +69,13 @@ class SolverConfig:
     smoothing: str
     gradient: str
     shape_model: str
+    opposition: str = 'v4_2'
+
+    def __post_init__(self):
+        if self.opposition not in ('v4_2', 'inward'):
+            raise ValueError('Unknown Botyard opposition mode')
+        if self.opposition == 'inward' and self.shape_model != 'v4_2':
+            raise ValueError('Inward opposition requires the v4_2 shape objective')
 
 
 @dataclass
@@ -101,13 +108,14 @@ def build_botyard_solver(config):
     from gs_s1_mujoco import load_hand
     from gs_s1_rviz import build_solver
     sys.path.append(str(Path(__file__).resolve().parent / 'data/gs_s1_hand_baselines'))
-    from botyard_live import BotyardRetargeter
+    from botyard_live import make_botyard_retargeter
 
     meshes = Path(get_package_share_directory('dexhand_description')) / 'meshes/gs_s1'
     solver = build_solver(hand=config.hand, objective='botyard')[0]
-    return BotyardRetargeter(solver, load_hand(Path(config.assets), meshes, config.hand),
-                            meshes, config.hand, Path(config.template) if config.template else None,
-                            config.smoothing, gradient=config.gradient, shape_model=config.shape_model)
+    return make_botyard_retargeter(solver, load_hand(Path(config.assets), meshes, config.hand),
+                                   meshes, config.hand, Path(config.template) if config.template else None,
+                                   config.smoothing, gradient=config.gradient, shape_model=config.shape_model,
+                                   opposition=config.opposition)
 
 
 def _solver_loop(connection, factory, config):

@@ -50,15 +50,68 @@ def test_no_output_until_both_feedback_and_tracked_target_exist(missing):
     assert r.step(1.) is None
 
 
-def test_stale_target_stops_and_resumption_starts_at_new_feedback():
+def test_stale_target_stops_and_resumption_preserves_last_command():
     r = relay()
     r.set_feedback(JOINTS, [.1, -.1] + [0.] * 16, 1.)
     r.set_target(protocol.FINGER_JOINTS, [1.] * 16, 1.)
     r.step(1.)
+    assert r.step(1.1) == pytest.approx([.1, -.1] + [.08] * 16)
+    assert r.step(1.2) == pytest.approx([.1, -.1] + [.16] * 16)
     assert r.step(1.6) is None
-    r.set_feedback(JOINTS, [.3, -.3] + [.4] * 16, 2.)
+    # The hand's sensor position lags the command. A new target resumes from
+    # .16, rather than rewinding to that delayed .04 measurement.
+    r.set_feedback(JOINTS, [.3, -.3] + [.04] * 16, 2.)
     r.set_target(protocol.FINGER_JOINTS, [1.] * 16, 2.)
-    assert r.step(2.) == [.3, -.3] + [.4] * 16
+    assert r.step(2.) == pytest.approx([.1, -.1] + [.24] * 16)
+
+
+def test_feedback_loss_restarts_from_new_measurement():
+    r = relay()
+    r.set_feedback(JOINTS, [.1, -.1] + [0.] * 16, 1.)
+    r.set_target(protocol.FINGER_JOINTS, [1.] * 16, 1.)
+    r.step(1.)
+    r.step(1.1)
+    r.set_target(protocol.FINGER_JOINTS, [1.] * 16, 2.2)
+    assert r.step(2.2) is None
+    assert r.command is None
+    r.set_feedback(JOINTS, [.3, -.3] + [.4] * 16, 2.3)
+    assert r.step(2.3) == [.3, -.3] + [.4] * 16
+
+
+def test_controller_reset_restarts_from_new_measurement():
+    r = relay()
+    r.set_feedback(JOINTS, [0.] * 18, 1.)
+    r.set_target(protocol.FINGER_JOINTS, [1.] * 16, 1.)
+    r.step(1.)
+    r.step(1.1)
+    r.reset()  # HardwareRelay calls this while controller status is invalid.
+    r.set_feedback(JOINTS, [.3, -.3] + [.4] * 16, 1.2)
+    assert r.step(1.2) == [.3, -.3] + [.4] * 16
+
+
+def test_half_second_feedback_delay_does_not_rewind_repeated_resumptions():
+    r = relay()
+    history = [(0., [0.] * 18)]
+    previous, previous_time = None, None
+    pauses = 0
+    for tick in range(200):
+        now = tick * .02
+        delayed = next((values for stamp, values in reversed(history) if stamp <= now - .5), [0.] * 18)
+        r.set_feedback(JOINTS, delayed, now)
+        if tick % 18 == 0:
+            # Computed targets arrive 300 ms after their source observation.
+            r.set_target(protocol.FINGER_JOINTS, [1.] * 16, now - .3)
+        output = r.step(now)
+        if output is None:
+            pauses += 1
+            continue
+        if previous is not None:
+            assert output[2] >= previous[2] - 1e-10
+            assert output[2] - previous[2] <= .8 * min(.1, now - previous_time) + 1e-10
+        previous, previous_time = output, now
+        history.append((now, output))
+    assert pauses > 0
+    assert previous[2:] == pytest.approx([1.] * 16)
 
 
 def test_stale_feedback_stops_even_with_fresh_targets():

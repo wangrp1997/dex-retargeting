@@ -17,6 +17,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, String
 
 from gs_s1_hardware_commands import FINGER_JOINTS, PositionRelay, WRIST_JOINTS
+from gs_s1_botyard_version import botyard_version
 
 
 def joint_limits(hand):
@@ -49,9 +50,14 @@ class HardwareRelay(Node):
             from gs_s1_hardware_log import HardwareSessionLog
             self.session_log = HardwareSessionLog(log_dir, dict(
                 hand=args.hand, controller=controller, ros_domain_id=os.environ.get('ROS_DOMAIN_ID', '0'),
+                botyard_opposition=getattr(args, 'botyard_opposition', 'v4_2'),
+                botyard_shape=getattr(args, 'botyard_shape', 'v4_2'),
+                algorithm_version=(botyard_version(getattr(args, 'botyard_opposition', 'v4_2'))
+                                   if getattr(args, 'botyard_shape', 'v4_2') == 'v4_2' else None),
                 command_protocol='18 positions; controller fills default velocity/effort/tactile',
                 expected_controller_velocity_rad_s=1.5708, relay_max_velocity_rad_s=1.5708,
-                relay_timer_period_s=.02, io_trace_requested=getattr(args, 'log_session_dir', None) is not None,
+                relay_timer_period_s=.02, relay_recovery_policy='preserve_last_output_on_target_timeout',
+                io_trace_requested=getattr(args, 'log_session_dir', None) is not None,
                 note='No images or video. Publication is not physical application.'),
                 directory=getattr(args, 'log_session_dir', None))
             self.get_logger().info(f'Hardware diagnostics: {self.session_log.directory}')
@@ -208,6 +214,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--hand', choices=('right', 'left'), default='left')
     parser.add_argument('--controller-namespace', default='')
+    parser.add_argument('--botyard-opposition', choices=('v4_2', 'inward'), default='v4_2',
+                        help='Tracker mode recorded in diagnostic metadata; controller settings are unchanged')
+    parser.add_argument('--botyard-shape', default='v4_2', help='Tracker shape recorded in diagnostic metadata')
     parser.add_argument('--log-dir', type=Path, help='Enable hardware diagnostics under this directory')
     parser.add_argument('--log-session-dir', type=Path, help='Session reserved by the IO tracing launch')
     args = parser.parse_args()

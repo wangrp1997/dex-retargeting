@@ -183,6 +183,8 @@ class BotyardRetargeter:
         if shape_model not in ('v4_2', 'sweep', 'direction', 'baseline', 'phalanx', 'thumb_span'):
             raise ValueError(f'Unknown Botyard shape objective: {shape_model}')
         self.shape_model = shape_model
+        self.opposition = 'v4_2'
+        self.algorithm_version = ALGORITHM_VERSION
         self.gradient = gradient
         self.mano = OnlineMano(template or Path.home() / '.cache/botyard-retargeting/mano' / f'{side}.npz',
                                thumb_direction_fit=shape_model in ('v4_2', 'sweep'))
@@ -270,7 +272,8 @@ class BotyardRetargeter:
                 else:
                     info = dict(optimizer_exception=None, min_protection_margin=None)
                 if trace is not None:
-                    trace.update(algorithm='botyard', algorithm_version=ALGORITHM_VERSION,
+                    trace.update(algorithm='botyard', algorithm_version=self.algorithm_version,
+                                 botyard_opposition=self.opposition,
                                  primary_optimizer_exception=primary_failure,
                                  closure_optimizer_exception=info['optimizer_exception'],
                                  closure_min_protection_margin=info['min_protection_margin'],
@@ -307,3 +310,18 @@ class BotyardRetargeter:
                          reference_position_rad=reference, reference_holds_total=self.reference.held,
                          output_holds_total=self.output.held)
         return q
+
+
+def make_botyard_retargeter(*args, opposition='v4_2', **kwargs):
+    """Select the reviewed inward experiment explicitly; keep v4.2 by default."""
+    if opposition == 'v4_2':
+        return BotyardRetargeter(*args, **kwargs)
+    if opposition != 'inward':
+        raise ValueError(f'Unknown Botyard opposition mode: {opposition}')
+    if kwargs.get('shape_model', 'baseline') != 'v4_2':
+        raise ValueError('Inward opposition requires the v4_2 shape objective')
+    # Lazy import avoids a cycle and runs the exact class/settings reviewed in
+    # the offline comparison. No volar-region contact target is enabled here.
+    from opposition_guidance_experiment import GuidedRetargeter
+    return GuidedRetargeter(*args, **kwargs, guide_weight=.2, starts=3,
+                            mode='distance_priority', facing_target='inward')
