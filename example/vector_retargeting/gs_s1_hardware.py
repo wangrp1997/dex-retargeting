@@ -89,7 +89,7 @@ class HardwareRelay(Node):
                 if not 0 <= age <= self.relay.target_timeout:
                     self.relay.target = None
                     return
-                self.relay.set_target(message.name, message.position, monotonic())
+                self.relay.set_target(message.name, message.position, monotonic() - age)
             except (KeyError, ValueError) as error:
                 self.get_logger().warning(f'Invalid tracked target: {error}', throttle_duration_sec=2.)
 

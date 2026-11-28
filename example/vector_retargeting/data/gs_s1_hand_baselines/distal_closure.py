@@ -59,6 +59,10 @@ class DistalClosure:
         loader = hppfcl.MeshLoader()
         self.meshes = [load_body_mesh(self.model, loader, i) for i in self.ids]
         self.local_witnesses = [None] * (len(self.ids) - 1)
+        # A value query and its subsequent Jacobian query often use identical
+        # link poses. Reuse exact triangle witnesses, never nearby-pose gaps.
+        self.pose_cache = [None] * (len(self.ids) - 1)
+        self.have_kinematics = self.have_com = False
         self.request = hppfcl.DistanceRequest()
         self.request.enable_nearest_points = True
         self.jac_a = np.empty((3, self.model.nv))
@@ -70,10 +74,14 @@ class DistalClosure:
         self.joint_penalties[thumb_ip] *= 4.
 
     def distances(self, x, with_gradient=False):
-        self.data.qpos[:] = self.mapping @ x
-        mujoco.mj_kinematics(self.model, self.data)
-        if with_gradient:
+        qpos = self.mapping @ x
+        if not self.have_kinematics or not np.array_equal(qpos, self.data.qpos):
+            self.data.qpos[:] = qpos
+            mujoco.mj_kinematics(self.model, self.data)
+            self.have_kinematics, self.have_com = True, False
+        if with_gradient and not self.have_com:
             mujoco.mj_comPos(self.model, self.data)
+            self.have_com = True
         transforms = [hppfcl.Transform3f(self.data.xmat[i].reshape(3, 3), self.data.xpos[i])
                       for i in self.ids]
         gaps = np.empty(4)
@@ -81,6 +89,17 @@ class DistalClosure:
         thumb_pose = transforms[0]
         for pair, finger_pose in enumerate(transforms[1:]):
             digit = pair + 1
+            bodies = [self.ids[0], self.ids[digit]]
+            key = np.r_[self.data.xpos[bodies].ravel(), self.data.xmat[bodies].ravel()]
+            cached = self.pose_cache[pair]
+            if cached is not None and np.array_equal(key, cached[0]):
+                distance, a, b = cached[1:]
+                gaps[pair] = max(distance, 0.)
+                if with_gradient and distance > 1e-10:
+                    mujoco.mj_jac(self.model, self.data, self.jac_a, None, a, self.ids[0])
+                    mujoco.mj_jac(self.model, self.data, self.jac_b, None, b, self.ids[digit])
+                    jac[pair] = ((b-a) / distance) @ (self.jac_b-self.jac_a) @ self.mapping
+                continue
             query = (self.meshes[0], thumb_pose, self.meshes[digit], finger_pose, self.request)
             seed = self.local_witnesses[pair]
             result = hppfcl.DistanceResult()
@@ -95,8 +114,9 @@ class DistalClosure:
                 result = hppfcl.DistanceResult()
                 distance = hppfcl.distance(*query, result)
             gaps[pair] = max(distance, 0.)
+            a, b = result.getNearestPoint1().copy(), result.getNearestPoint2().copy()
+            self.pose_cache[pair] = key, distance, a, b
             if distance > 1e-10:
-                a, b = result.getNearestPoint1(), result.getNearestPoint2()
                 self.local_witnesses[pair] = (thumb_pose.inverse().transform(a),
                                               finger_pose.inverse().transform(b))
                 if with_gradient:

@@ -31,12 +31,17 @@ class MeshConstraints:
         self.count = len(keys)
         self.jac_a = np.empty((3, model.nv))
         self.jac_b = np.empty_like(self.jac_a)
+        self.have_state = False
 
     def update(self, x):
-        self.data.qpos[:] = self.mapping @ x
+        qpos = self.mapping @ x
+        if self.have_state and np.array_equal(qpos, self.data.qpos):
+            return
+        self.data.qpos[:] = qpos
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
         mujoco.mj_collision(self.model, self.data)
+        self.have_state = True
 
     def feasible(self, x):
         self.update(x)

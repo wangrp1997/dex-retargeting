@@ -37,9 +37,14 @@ class PalmDistances:
         self.distances = np.full(len(self.mobile), -np.inf)
         self.request = hppfcl.DistanceRequest()
         self.request.enable_nearest_points = True
+        self.pose_cache = [None] * len(self.pairs)
 
     def measure(self, data, i):
         a, b = self.pairs[i]
+        key = np.r_[data.xpos[[a, b]].ravel(), data.xmat[[a, b]].ravel()]
+        cached = self.pose_cache[i]
+        if cached is not None and np.array_equal(key, cached[0]):
+            return cached[1:]
         ta = hppfcl.Transform3f(data.xmat[a].reshape(3, 3), data.xpos[a])
         tb = hppfcl.Transform3f(data.xmat[b].reshape(3, 3), data.xpos[b])
         result = hppfcl.DistanceResult()
@@ -47,6 +52,7 @@ class PalmDistances:
         self.distances[i] = distance
         self.rotations[i] = data.xmat[b]
         self.positions[i] = data.xpos[b]
+        self.pose_cache[i] = key, distance, result
         return distance, result
 
     def clear(self, data, margin):

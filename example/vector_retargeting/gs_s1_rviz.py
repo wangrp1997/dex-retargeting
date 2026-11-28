@@ -123,6 +123,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
                 break
             raise RuntimeError("Camera stopped returning frames.")
         capture_time = monotonic()
+        captured_stamp = node.get_clock().now().to_msg()
         if recording is not None:
             recording.sample_simulator()
         send_overlay = botyard and overlay_pub.get_subscription_count() > 0
@@ -159,7 +160,7 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         if tracking != previous_tracking:
             node.get_logger().info(status if tracking else f"{status}, holding pose")
             previous_tracking = tracking
-        message.header.stamp = node.get_clock().now().to_msg()
+        message.header.stamp = captured_stamp
         publisher.publish(message)
         if tracking:
             tracked_publisher.publish(message)
@@ -237,22 +238,34 @@ def main():
     source.add_argument("--camera", type=int, default=0, help="OpenCV camera index (default: 0)")
     source.add_argument("--video", type=Path, help="Replay an MP4 instead of using the camera")
     parser.add_argument("--record-dir", type=Path)
+    parser.add_argument('--live-pipeline', choices=('latest', 'serial'), default='latest',
+                        help='Botyard webcam scheduling; video/recording always stays synchronized')
     parser.add_argument("--no-camera-window", action="store_true")
     parser.add_argument("--no-target-collision-overlay", action="store_true")
     args = parser.parse_args()
     if args.record_dir and args.objective != "botyard":
         parser.error("--record-dir requires --objective botyard")
     show_camera = not args.no_camera_window
+    latest_live = (args.objective == 'botyard' and args.video is None
+                   and not args.record_dir and args.live_pipeline == 'latest')
     solver, monitor = build_solver(show_collisions=show_camera and not args.no_target_collision_overlay,
                                   hand=args.hand, objective=args.objective)
     mesh_dir = Path(get_package_share_directory("dexhand_description")) / "meshes/gs_s1"
-    model = load_hand(args.assets, mesh_dir, args.hand)
+    model = None if latest_live else load_hand(args.assets, mesh_dir, args.hand)
     if args.objective == "botyard":
         # Import the same two objectives as the offline benchmark, only when selected.
         sys.path.append(str(Path(__file__).resolve().parent / "data/gs_s1_hand_baselines"))
-        from botyard_live import BotyardRetargeter
-        retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
-                                       gradient=args.botyard_gradient, shape_model=args.botyard_shape)
+        from botyard_live import BotyardRetargeter, OnlineMano
+        if latest_live:
+            from gs_s1_live_pipeline import SolverConfig
+            live_config = SolverConfig(str(args.assets), args.hand, str(args.mano_model) if args.mano_model else None,
+                                       args.smoothing, args.botyard_gradient, args.botyard_shape)
+            mano = OnlineMano(args.mano_model or Path.home() / '.cache/botyard-retargeting/mano' / f'{args.hand}.npz',
+                              thumb_direction_fit=args.botyard_shape in ('v4_2', 'sweep'))
+            retargeter = None
+        else:
+            retargeter = BotyardRetargeter(solver, model, mesh_dir, args.hand, args.mano_model, args.smoothing,
+                                           gradient=args.botyard_gradient, shape_model=args.botyard_shape)
     else:
         retargeter = build_constrained(solver, model, args.objective, args)
     device = str(args.video) if args.video else args.camera
@@ -286,8 +299,12 @@ def main():
             recording = SessionRecorder(node, args.record_dir, scene, cleanup)
             recording.wait_for_simulator()
         try:
-            stream(node, capture, solver, retargeter, monitor, detector, args.video is not None,
-                   show_camera, args.hand, args.smoothing, args.objective, recording)
+            if latest_live:
+                from gs_s1_live import stream_live
+                stream_live(node, capture, solver, mano, monitor, detector, show_camera, live_config)
+            else:
+                stream(node, capture, solver, retargeter, monitor, detector, args.video is not None,
+                       show_camera, args.hand, args.smoothing, args.objective, recording)
         except KeyboardInterrupt:
             pass
 

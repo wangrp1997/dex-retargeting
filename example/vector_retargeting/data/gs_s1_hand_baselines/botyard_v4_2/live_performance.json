@@ -1,0 +1,148 @@
+{
+  "date": "2026-11-28",
+  "baseline_commit": "c5b983d",
+  "algorithm": "botyard",
+  "algorithm_version": "4.2",
+  "benchmark_before": {
+    "hand": "right",
+    "algorithm": "botyard",
+    "algorithm_version": "4.2",
+    "start": 300,
+    "warmup": 8,
+    "frames": 24,
+    "stages": {
+      "mano_fit": {
+        "mean_ms": 7.383096999546979,
+        "median_ms": 7.326370003283955,
+        "p95_ms": 8.356564777204767
+      },
+      "finger_shape": {
+        "mean_ms": 19.93971612440267,
+        "median_ms": 19.1335915151285,
+        "p95_ms": 26.14420639147283
+      },
+      "thumb_base": {
+        "mean_ms": 7.524459499109071,
+        "median_ms": 6.023945999913849,
+        "p95_ms": 12.106670944194772
+      },
+      "surface_closure": {
+        "mean_ms": 111.54587241859797,
+        "median_ms": 97.90093250921927,
+        "p95_ms": 169.9682988910353
+      },
+      "total_fit_and_retarget": {
+        "mean_ms": 151.4520660408986,
+        "median_ms": 134.69103749957867,
+        "p95_ms": 206.87200675602065
+      }
+    },
+    "note": "Cached observations only; excludes camera, MediaPipe, drawing, ROS transport and hardware. Run with OPENBLAS_NUM_THREADS=1. No ROS node or motion publisher is created."
+  },
+  "benchmark_after": {
+    "hand": "right",
+    "algorithm": "botyard",
+    "algorithm_version": "4.2",
+    "start": 300,
+    "warmup": 8,
+    "frames": 24,
+    "stages": {
+      "mano_fit": {
+        "mean_ms": 7.536152252820709,
+        "median_ms": 7.50800350215286,
+        "p95_ms": 8.507169056974817
+      },
+      "finger_shape": {
+        "mean_ms": 19.470726833484758,
+        "median_ms": 18.988926996826194,
+        "p95_ms": 24.89801213960163
+      },
+      "thumb_base": {
+        "mean_ms": 7.450601078744512,
+        "median_ms": 6.180984986713156,
+        "p95_ms": 11.928415548754854
+      },
+      "surface_closure": {
+        "mean_ms": 100.8725074607355,
+        "median_ms": 87.73660998849664,
+        "p95_ms": 151.04158705653384
+      },
+      "total_fit_and_retarget": {
+        "mean_ms": 140.47173329163343,
+        "median_ms": 124.48690050223377,
+        "p95_ms": 188.10616604023377
+      }
+    },
+    "note": "Cached observations only; excludes camera, MediaPipe, drawing, ROS transport and hardware. Run with OPENBLAS_NUM_THREADS=1. No ROS node or motion publisher is created."
+  },
+  "independent_pipeline": {
+    "mode": "spawned production Botyard v4.2 worker plus independent MANO fit/draw",
+    "inputs": 90,
+    "visualization_frames": 86,
+    "duration_s": 3.1056721589993685,
+    "visualization_loop_hz": 28.979233928219113,
+    "visualization_mean_ms": 16.024271070924694,
+    "visualization_p95_ms": 16.979530999378767,
+    "accepted": 24,
+    "discarded": 1,
+    "solver_mean_ms": 97.5955281695254,
+    "source_to_result_mean_ms": 136.1710061695097,
+    "source_to_result_p95_ms": 182.0743183954619,
+    "accepted_command_hz": 7.727795714191763,
+    "all_geometry_checks_passed": true,
+    "all_velocity_checks_passed": true,
+    "note": "Cached observations offered at 30 Hz; includes causal MANO fit and mesh drawing, excludes camera acquisition, MediaPipe, imshow, ROS transport and real hardware. Tracking outage simulated at inputs 40-43. No motion published."
+  },
+  "deterministic_replay": {
+    "example": {
+      "frames": 621,
+      "tracked_frames": 621,
+      "validation_geometry_failures": [],
+      "protection_failures": [],
+      "joint_limit_failures": [],
+      "max_velocity_violation_rad": 1.3877787807814457e-17,
+      "reference_exceptions": [
+        259
+      ],
+      "correction_exceptions": [],
+      "max_command_change_rad": 0.0
+    },
+    "custom": {
+      "frames": 395,
+      "tracked_frames": 330,
+      "validation_geometry_failures": [],
+      "protection_failures": [],
+      "joint_limit_failures": [],
+      "max_velocity_violation_rad": 5.551115123125783e-17,
+      "reference_exceptions": [],
+      "correction_exceptions": [
+        119
+      ],
+      "max_command_change_rad": 0.0
+    },
+    "sweep": {
+      "frames": 149,
+      "tracked_frames": 149,
+      "validation_geometry_failures": [],
+      "protection_failures": [],
+      "joint_limit_failures": [],
+      "max_velocity_violation_rad": 0.0,
+      "reference_exceptions": [],
+      "correction_exceptions": [],
+      "max_command_change_rad": 0.0
+    }
+  },
+  "automated_tests": {
+    "passed": 122,
+    "warnings": 4
+  },
+  "default_controller_mock": {
+    "mock_only": true,
+    "ROS_DOMAIN_ID": 193,
+    "default_controller_active": true,
+    "commands": 75,
+    "wrist_preserved": true,
+    "no_commands_before_tracking": true,
+    "stale_target_stopped": true
+  }
+}

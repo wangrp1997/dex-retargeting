@@ -44,6 +44,7 @@ def start_preview(context):
         tracker_env.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
         input_args.extend(["--botyard-gradient", LaunchConfiguration("botyard_gradient")])
         input_args.extend(["--botyard-shape", LaunchConfiguration("botyard_shape")])
+        input_args.extend(['--live-pipeline', LaunchConfiguration('live_pipeline')])
         mano_model = LaunchConfiguration("mano_model").perform(context)
         if mano_model:
             input_args.extend(["--mano-model", mano_model])
@@ -120,6 +121,8 @@ def generate_launch_description():
         DeclareLaunchArgument("botyard_gradient", default_value="analytic", choices=["finite_difference", "analytic"]),
         DeclareLaunchArgument("botyard_shape", default_value="v4_2", choices=["v4_2", "sweep", "direction", "baseline", "phalanx", "thumb_span"]),
         DeclareLaunchArgument("smoothing", default_value="one_euro", choices=["one_euro", "off"]),
+        DeclareLaunchArgument('live_pipeline', default_value='latest', choices=['latest', 'serial'],
+                              description='Botyard webcam scheduling; video and recording stay synchronized'),
         DeclareLaunchArgument("wuji_root", default_value=str(projects / "wuji-retargeting")),
         DeclareLaunchArgument("tsinghua_root", default_value=str(projects / "tsinghua-retargeting")),
         DeclareLaunchArgument("mano_model", default_value="", description="Optional prepared MANO NPZ for the selected hand"),
