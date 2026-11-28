@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 
 
-def test_live_stream_publishes_fresh_solutions_once_and_keeps_source_stamps(monkeypatch):
+@pytest.mark.parametrize('publish_timing', [False, True])
+def test_live_stream_publishes_fresh_solutions_once_and_keeps_source_stamps(monkeypatch, publish_timing):
     pytest.importorskip('rclpy')
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'example/vector_retargeting'))
     import gs_s1_live as live
@@ -97,7 +98,7 @@ def test_live_stream_publishes_fresh_solutions_once_and_keeps_source_stamps(monk
                                                         robot=SimpleNamespace(q0=np.zeros(18))))
     mano = SimpleNamespace(fit=lambda *args: (joints, np.zeros((778, 3))))
     live.stream_live(Node(), None, solver, mano, None, Detector(), False,
-                     SolverConfig('', 'left', None, 'off', 'analytic', 'v4_2'))
+                     SolverConfig('', 'left', None, 'off', 'analytic', 'v4_2'), publish_timing=publish_timing)
     tracked = endpoints['tracked_joint_targets'].messages
     assert len(tracked) == 2  # The result from frame 0 was discarded.
     stamps = [m.header.stamp.sec + 1e-9 * m.header.stamp.nanosec for m in tracked]
@@ -112,6 +113,18 @@ def test_live_stream_publishes_fresh_solutions_once_and_keeps_source_stamps(monk
     assert overlays[3].data == overlays[4].data == ''
     assert overlays[5].data
     assert endpoints['camera'].closed and endpoints['worker'].closed
+    if publish_timing:
+        import json
+        timings = [json.loads(m.data) for m in endpoints['pipeline_timing'].messages]
+        observations = [row for row in timings if row['kind'] == 'observation']
+        solutions = [row for row in timings if row['kind'] == 'solution']
+        assert len(observations) == 12
+        assert not observations[3]['tracking']
+        assert [row['sequence'] for row in solutions] == [5, 8]
+        assert [row['source_stamp_ns'] for row in solutions] == [
+            m.header.stamp.sec * 10**9 + m.header.stamp.nanosec for m in tracked]
+    else:
+        assert 'pipeline_timing' not in endpoints
 
 
 def test_hardware_timeout_includes_time_spent_solving(monkeypatch):
@@ -128,7 +141,7 @@ def test_hardware_timeout_includes_time_spent_solving(monkeypatch):
     message = JointState()
     message.name, message.position = list(FINGER_JOINTS), [.5] * 16
     message.header.stamp = Time(seconds=100.).to_msg()
-    node = SimpleNamespace(relay=relay,
+    node = SimpleNamespace(relay=relay, target_sequence=0, record=lambda *args, **kwargs: None,
                            get_clock=lambda: SimpleNamespace(now=lambda: Time(seconds=100.4)))
     monkeypatch.setattr(hardware, 'monotonic', lambda: 10.)
     hardware.HardwareRelay.target(node, message)

@@ -56,6 +56,8 @@ def test_hardware_calls_default_rs485_controller_with_matching_model(launch_modu
         cmd = [perform_substitutions(ctx, arg) for arg in action.cmd]
         assert cmd[cmd.index('--hand') + 1] == hand
         assert '--record-dir' not in cmd
+        assert '--log-dir' not in cmd
+        assert '--publish-timing' not in cmd
 
 
 def test_existing_controller_is_reused_without_starting_another_driver(launch_module):
@@ -64,3 +66,20 @@ def test_existing_controller_is_reused_without_starting_another_driver(launch_mo
     actions = launch_module.start_preview(ctx)
     assert len(actions) == 2
     assert all(isinstance(action, ExecuteProcess) for action in actions)
+
+
+def test_hardware_logging_is_opt_in_and_wires_both_processes(launch_module, tmp_path):
+    from launch.utilities import perform_substitutions
+    ctx = context(launch_module, 'hardware', start_hardware='false', hardware_log='true',
+                  hardware_log_dir=str(tmp_path))
+    relay, tracker = launch_module.start_preview(ctx)
+    relay_cmd = [perform_substitutions(ctx, arg) for arg in relay.cmd]
+    tracker_cmd = [perform_substitutions(ctx, arg) for arg in tracker.cmd]
+    assert relay_cmd[relay_cmd.index('--log-dir') + 1] == str(tmp_path)
+    assert '--publish-timing' in tracker_cmd
+    assert '--record-dir' not in tracker_cmd
+
+
+def test_hardware_log_rejects_simulation_backend(launch_module):
+    with pytest.raises(ValueError, match='hardware_log requires'):
+        launch_module.start_preview(context(launch_module, 'mujoco', hardware_log='true'))

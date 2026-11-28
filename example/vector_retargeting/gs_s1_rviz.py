@@ -1,6 +1,7 @@
 """Publish webcam retargeting targets for the selected Botyard GS S1 hand."""
 
 import argparse
+import json
 import sys
 from contextlib import ExitStack
 from pathlib import Path
@@ -91,7 +92,7 @@ def build_constrained(solver, model, method, args):
 
 
 def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_camera, hand,
-           smoothing, objective_name, recording=None):
+           smoothing, objective_name, recording=None, *, publish_timing=False):
     publisher = node.create_publisher(JointState, "joint_states", 10)
     tracked_publisher = node.create_publisher(JointState, "tracked_joint_targets", 1)
     message = JointState()
@@ -103,10 +104,12 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
     interval = 1.0 / fps if is_video and np.isfinite(fps) and fps > 0 else 0.0
     landmark_filter = LandmarkFilter(smoothing)
     botyard = objective_name == "botyard"
-    if botyard:
+    if botyard or publish_timing:
         from std_msgs.msg import String
+    if botyard:
         from gs_s1_mano_overlay import encode_pose
         overlay_pub = node.create_publisher(String, "mano_overlay_pose", 1)
+    timing_pub = node.create_publisher(String, 'pipeline_timing', 20) if publish_timing else None
     show_mano = botyard
     calibration = FingerRootCalibration(solver.optimizer.robot) if show_camera and not botyard else None
     last_frame = monotonic() - 1 / 30
@@ -132,12 +135,17 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         dt = interval or min(capture_time - last_frame, .1)
         last_frame = capture_time
         frames += 1
+        detect_start = monotonic()
         _, points, landmarks, wrist_axes = detector.detect(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         tracking = points is not None and np.isfinite(points).all()
         if botyard and tracking:
             pixels = detector.parse_keypoint_2d(landmarks, frame.shape)
             tracking = (np.isfinite(wrist_axes).all() and np.isfinite(pixels).all()
                         and np.linalg.norm(np.cross(points[5] - points[0], points[9] - points[0])) > 1e-8)
+        if timing_pub is not None:
+            timing_pub.publish(String(data=json.dumps(dict(
+                kind='observation', sequence=frames, captured_at_steady_ns=int(capture_time * 1e9),
+                tracking=bool(tracking), detection_s=monotonic() - detect_start, mano_fit_s=None))))
         local_points = points @ MANO_TO_GS_S1 if tracking else None
         if calibration is not None:
             calibration.observe(local_points)
@@ -151,7 +159,8 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
             else:
                 aligned = calibration.apply(target) if calibration is not None else target
                 q = retargeter.solve(target, dt, aligned_points=aligned)
-            solve_seconds += monotonic() - solve_start
+            frame_solve_seconds = monotonic() - solve_start
+            solve_seconds += frame_solve_seconds
             if not np.isfinite(q).all():
                 raise ValueError("Non-finite retargeted joint position")
             message.position = q[indices].tolist()
@@ -164,6 +173,11 @@ def stream(node, capture, solver, retargeter, monitor, detector, is_video, show_
         publisher.publish(message)
         if tracking:
             tracked_publisher.publish(message)
+            if timing_pub is not None:
+                timing_pub.publish(String(data=json.dumps(dict(
+                    kind='solution', sequence=frames,
+                    source_stamp_ns=message.header.stamp.sec * 10**9 + message.header.stamp.nanosec,
+                    serial_mano_and_solve_s=frame_solve_seconds, capture_to_publish_s=monotonic() - capture_time))))
         if send_overlay:
             payload = encode_pose(trace['mano_joints_wrist_m'], trace['mano_vertices_wrist_m']) if tracking else ''
             overlay_pub.publish(String(data=payload))
@@ -240,6 +254,7 @@ def main():
     parser.add_argument("--record-dir", type=Path)
     parser.add_argument('--live-pipeline', choices=('latest', 'serial'), default='latest',
                         help='Botyard webcam scheduling; video/recording always stays synchronized')
+    parser.add_argument('--publish-timing', action='store_true', help='Publish timing diagnostics without images')
     parser.add_argument("--no-camera-window", action="store_true")
     parser.add_argument("--no-target-collision-overlay", action="store_true")
     args = parser.parse_args()
@@ -301,10 +316,12 @@ def main():
         try:
             if latest_live:
                 from gs_s1_live import stream_live
-                stream_live(node, capture, solver, mano, monitor, detector, show_camera, live_config)
+                stream_live(node, capture, solver, mano, monitor, detector, show_camera, live_config,
+                            publish_timing=args.publish_timing)
             else:
                 stream(node, capture, solver, retargeter, monitor, detector, args.video is not None,
-                       show_camera, args.hand, args.smoothing, args.objective, recording)
+                       show_camera, args.hand, args.smoothing, args.objective, recording,
+                       publish_timing=args.publish_timing)
         except KeyboardInterrupt:
             pass
 

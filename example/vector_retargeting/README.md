@@ -33,6 +33,43 @@ The relay reads the controller's actual `joints` parameter and maps targets by n
 
 The default controller chain was verified with mock hardware in an isolated ROS domain, including nonzero wrist feedback and stale-input stopping. This is software integration verification; real RS485 motion still needs the operator's test.
 
+To save diagnostics for later analysis, add `hardware_log:=true` to the hardware launch command:
+
+```zsh
+ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
+  backend:=hardware hand:=left objective:=botyard camera:=0 hardware_log:=true
+```
+
+The relay prints the absolute session directory under `logs/hardware/YYYYMMDD-HHMMSS-xxxxxxxx/`.
+Use `hardware_log_dir:=/path/to/logs` to choose another parent directory. The default is
+`hardware_log:=false`; this diagnostic mode saves no images or videos. Normal ROS launch
+console logs are independent of this switch. Press **Q** or **Ctrl+C** to end the session
+and finish the diagnostic files:
+
+- `events.jsonl`: source-stamped optimization targets, named controller commands, joint feedback,
+  controller/relay state, optional stamped hardware acquisitions and vision/solver timings.
+  Each command links to the accepted target sequence and its original source timestamp.
+- `session.json`: hand/controller settings and recording coverage, including queue overflow,
+  unfinished writes or disk errors. A bounded background writer keeps disk I/O out of relay callbacks.
+- `summary.json`: observed update rates, input age, stage processing times and position errors.
+  Feedback is compared with the most recent command published at its source timestamp.
+
+The logger subscribes to `dexhand_interfaces/HandSample` when available. Its valid acquisition
+sequences distinguish fresh hardware samples from `/joint_states` repeatedly publishing old
+readings. If that driver telemetry is absent, the hardware acquisition rate remains unknown.
+Receipt timestamps do not measure sensor exposure, RS485 application time or motor response onset;
+the summary does not report an inferred motor delay. The default latest pipeline reports
+detection, MANO fit and robot solve separately; serial comparison reports MANO plus solve together.
+Logging retains the existing control settings and sends no extra movement commands.
+
+Sessions are ignored by Git. To regenerate a summary after an interrupted session, or inspect an
+existing session, run the read-only command:
+
+```zsh
+~/miniconda3/envs/dex_retargeting/bin/python \
+  example/vector_retargeting/gs_s1_hardware_log.py /path/to/session
+```
+
 The **Botyard** objective fits the selected MANO hand to each frame's 3D detections and 2D image points using the previous pose. It uses the template shape and estimates palm scale online. The offline RGB benchmark fits shape and pose jointly across the full recording. The live optimizer uses joint limits, passive couplings and mesh checks. The camera window overlays the translucent cyan MANO surface from the current fit under the MediaPipe skeleton. Press **M** in the camera window to hide or show the surface while retargeting continues.
 
 Botyard webcam preview defaults to `live_pipeline:=latest`. A capture thread retains one latest frame, the main process detects/fits/displays the current hand, and a spawned process owns the complete robot solver. Only one solve is in flight; its next input is the latest available MANO pose. The window reports vision processing time, solver processing time, camera-frame age and command-source age separately. Optimization still runs more slowly than visualization. Both simulation and hardware use the same scheduling.

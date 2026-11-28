@@ -28,6 +28,9 @@ def start_preview(context):
     video = LaunchConfiguration("video").perform(context)
     input_args = ["--video", video] if video else ["--camera", LaunchConfiguration("camera")]
     record_dir = LaunchConfiguration("record_dir").perform(context)
+    hardware_log = IfCondition(LaunchConfiguration('hardware_log')).evaluate(context)
+    if hardware_log and backend != 'hardware':
+        raise ValueError('hardware_log requires backend:=hardware')
     if record_dir:
         if backend != "mujoco" or not botyard:
             raise ValueError("Recording requires backend:=mujoco and objective:=botyard")
@@ -67,9 +70,13 @@ def start_preview(context):
                 }.items(),
             ))
         input_args.append('--no-target-collision-overlay')
+        log_args = []
+        if hardware_log:
+            log_args = ['--log-dir', LaunchConfiguration('hardware_log_dir')]
+            input_args.append('--publish-timing')
         model = ExecuteProcess(
             cmd=[LaunchConfiguration('tracker_python'), str(example / 'gs_s1_hardware.py'),
-                 '--hand', hand, '--controller-namespace', namespace],
+                 '--hand', hand, '--controller-namespace', namespace, *log_args],
             output='screen',
             on_exit=[EmitEvent(event=Shutdown(reason='Hardware relay closed'))],
         )
@@ -130,6 +137,10 @@ def generate_launch_description():
         DeclareLaunchArgument("video", default_value=""),
         DeclareLaunchArgument("record_dir", default_value="", description="Session directory created by record_gs_s1.zsh"),
         DeclareLaunchArgument('hardware_port', default_value='/dev/dexhand', description='RS485 device for the hardware backend'),
+        DeclareLaunchArgument('hardware_log', default_value='false', choices=['true', 'false'],
+                              description='Save hardware targets, commands, feedback and timings; no video'),
+        DeclareLaunchArgument('hardware_log_dir', default_value=str(Path(__file__).resolve().parents[2] / 'logs/hardware'),
+                              description='Parent directory for timestamped hardware diagnostic sessions'),
         DeclareLaunchArgument('controller_namespace', default_value='', description='Namespace of the default dexhand_controller'),
         DeclareLaunchArgument('start_hardware', default_value='true', choices=['true', 'false'],
                               description='Start the ros2_botyard default controller; false reuses an existing controller'),

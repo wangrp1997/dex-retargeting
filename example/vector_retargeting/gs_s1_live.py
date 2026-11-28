@@ -1,5 +1,6 @@
 """Fresh camera/MANO preview with a separate Botyard optimization process."""
 from contextlib import ExitStack
+import json
 from time import monotonic
 
 import cv2
@@ -20,10 +21,15 @@ def source_stamp(node, captured_at):
     return (node.get_clock().now() - Duration(seconds=max(0., monotonic() - captured_at))).to_msg()
 
 
-def stream_live(node, capture, solver, mano, monitor, detector, show_camera, config):
+def stream_live(node, capture, solver, mano, monitor, detector, show_camera, config, *, publish_timing=False):
     publisher = node.create_publisher(JointState, 'joint_states', 10)
     tracked_publisher = node.create_publisher(JointState, 'tracked_joint_targets', 1)
     overlay_pub = node.create_publisher(String, 'mano_overlay_pose', 1)
+    timing_pub = node.create_publisher(String, 'pipeline_timing', 20) if publish_timing else None
+
+    def timing(**fields):
+        if timing_pub is not None:
+            timing_pub.publish(String(data=json.dumps(fields, allow_nan=False, separators=(',', ':'))))
     message = JointState()
     message.name = WRIST_JOINTS + FINGER_JOINTS
     indices = [solver.joint_names.index(name) for name in message.name]
@@ -57,16 +63,26 @@ def stream_live(node, capture, solver, mano, monitor, detector, show_camera, con
                     pixels = detector.parse_keypoint_2d(landmarks, frame.shape)
                     tracking = (np.isfinite(wrist_axes).all() and np.isfinite(pixels).all()
                                 and np.linalg.norm(np.cross(points[5] - points[0], points[9] - points[0])) > 1e-8)
+                detection_s = monotonic() - start
                 lane.observe(tracking, timestamp)
                 status = f'Tracking {config.hand} hand' if tracking else f'Waiting for {config.hand} hand'
                 if tracking != previous_tracking:
                     node.get_logger().info(status if tracking else status + ', holding pose')
                     previous_tracking = tracking
                 if tracking:
+                    mano_start = monotonic()
                     camera_points = points @ detector.operator2mano.T @ wrist_axes.T
                     joints, vertices = mano.fit(camera_points, pixels, frame.shape[1::-1], timestamp)
                     target = filtered.update(points @ MANO_TO_GS_S1, timestamp)
                     tracked += 1
+                    mano_s = monotonic() - mano_start
+                else:
+                    mano_s = None
+                if timing_pub is not None:
+                    timing(kind='observation', sequence=sample.sequence,
+                           captured_at_steady_ns=int(timestamp * 1e9), tracking=bool(tracking),
+                           detection_s=detection_s, mano_fit_s=mano_s,
+                           capture_to_vision_s=monotonic() - timestamp)
                 vision_seconds += monotonic() - start
                 if overlay_pub.get_subscription_count() > 0:
                     overlay_pub.publish(String(data=encode_pose(joints, vertices) if tracking else ''))
@@ -81,11 +97,18 @@ def stream_live(node, capture, solver, mano, monitor, detector, show_camera, con
                 last_solve = reply.solve_seconds
                 solve_seconds += last_solve
                 command_time = reply.captured_at
+                if timing_pub is not None:
+                    timing(kind='solution', sequence=reply.sequence,
+                           source_stamp_ns=message.header.stamp.sec * 10**9 + message.header.stamp.nanosec,
+                           solve_s=reply.solve_seconds, capture_to_publish_s=monotonic() - reply.captured_at)
             if sample is not None or reply is not None:
                 publisher.publish(message)
             if sample is not None:
                 if tracking:
-                    lane.submit(sample.sequence, timestamp, joints, vertices, monotonic())
+                    dispatched = lane.submit(sample.sequence, timestamp, joints, vertices, monotonic())
+                    if dispatched and timing_pub is not None:
+                        timing(kind='dispatch', sequence=sample.sequence,
+                               capture_to_dispatch_s=monotonic() - timestamp, solve_dt_s=lane.pending.dt)
                 # Held preview poses retain their original timestamp. The
                 # hardware topic above publishes each accepted solve once.
                 if show_camera:
