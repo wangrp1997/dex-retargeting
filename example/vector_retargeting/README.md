@@ -62,6 +62,29 @@ the summary does not report an inferred motor delay. The default latest pipeline
 detection, MANO fit and robot solve separately; serial comparison reports MANO plus solve together.
 Logging retains the existing control settings and sends no extra movement commands.
 
+For serial send/response/ACK timing, restart the hardware session with the additional
+`hardware_io_trace:=true` switch:
+
+```zsh
+ros2 launch "$PWD/example/vector_retargeting/gs_s1_preview.launch.py" \
+  backend:=hardware hand:=left objective:=botyard camera:=0 \
+  hardware_log:=true hardware_io_trace:=true
+```
+
+This adds `io_trace.jsonl` inside the same session. It records SDK serial send entry/return,
+response wait entry/return and validated ACK success, linked by request IDs and host wall/steady
+timestamps. Control requests retain their encoded parameter bytes. Summary statistics separate
+command IDs so startup version-probe failures do not look like motion-time failures. These are
+host SDK boundaries: ACK acceptance is not firmware application time or motion completion.
+
+The opt-in Linux tracer builds locally with `g++` against the installed SDK headers, checks its
+exported RS485 functions, and loads only in the hardware bringup's process environment. Installed
+libraries are retained. A bounded background writer saves the trace, including a dropped-event
+count at clean shutdown. The cache is under the ignored log directory. This requires
+`start_hardware:=true`, since an existing controller process cannot pick up the tracer on restart
+of the camera alone. Both logging switches default to false. Virtual-serial tests compare the
+unmodified SDK's outgoing packets and return values with tracing off/on, including NACK and timeout.
+
 Sessions are ignored by Git. To regenerate a summary after an interrupted session, or inspect an
 existing session, run the read-only command:
 

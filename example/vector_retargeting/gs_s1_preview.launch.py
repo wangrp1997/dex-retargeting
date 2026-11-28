@@ -9,8 +9,10 @@ from launch.actions import (
     DeclareLaunchArgument,
     EmitEvent,
     ExecuteProcess,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
+    SetEnvironmentVariable,
 )
 from launch.events import Shutdown
 from launch.conditions import IfCondition
@@ -29,8 +31,12 @@ def start_preview(context):
     input_args = ["--video", video] if video else ["--camera", LaunchConfiguration("camera")]
     record_dir = LaunchConfiguration("record_dir").perform(context)
     hardware_log = IfCondition(LaunchConfiguration('hardware_log')).evaluate(context)
+    io_trace = IfCondition(LaunchConfiguration('hardware_io_trace')).evaluate(context)
     if hardware_log and backend != 'hardware':
         raise ValueError('hardware_log requires backend:=hardware')
+    if io_trace and (backend != 'hardware' or not hardware_log
+                     or not IfCondition(LaunchConfiguration('start_hardware')).evaluate(context)):
+        raise ValueError('hardware_io_trace requires backend:=hardware, hardware_log:=true and start_hardware:=true')
     if record_dir:
         if backend != "mujoco" or not botyard:
             raise ValueError("Recording requires backend:=mujoco and objective:=botyard")
@@ -57,10 +63,11 @@ def start_preview(context):
         if not botyard:
             raise ValueError('The hardware backend uses objective:=botyard')
         namespace = LaunchConfiguration('controller_namespace').perform(context).strip('/')
+        trace_session = None
         if IfCondition(LaunchConfiguration('start_hardware')).evaluate(context):
             hardware = Path(get_package_share_directory('dexhand_bringup'))
             port = LaunchConfiguration('hardware_port').perform(context)
-            startup.append(IncludeLaunchDescription(
+            bringup = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(str(hardware / 'launch/hw_dexhand_controller.launch.py')),
                 launch_arguments={
                     'namespace': namespace, 'use_rviz': 'False', 'cap_grant': 'shell',
@@ -68,11 +75,28 @@ def start_preview(context):
                                    f'use_left_hand:={str(hand == "left").lower()} '
                                    f'communicate:=RS485 port_name:={port}'),
                 }.items(),
-            ))
+            )
+            if io_trace:
+                # Import by path because launch files need not be on PYTHONPATH.
+                import importlib.util
+                spec = importlib.util.spec_from_file_location('botyard_io_trace', example / 'gs_s1_io_trace.py')
+                tracer = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(tracer)
+                trace_session, library, sdk = tracer.prepare_trace(LaunchConfiguration('hardware_log_dir').perform(context))
+                preload = str(library) + (':' + context.environment['LD_PRELOAD'] if context.environment.get('LD_PRELOAD') else '')
+                startup.append(GroupAction([
+                    SetEnvironmentVariable('LD_PRELOAD', preload),
+                    SetEnvironmentVariable('BOTYARD_IO_TRACE_FILE', str(trace_session / 'io_trace.jsonl')),
+                    SetEnvironmentVariable('BOTYARD_IO_TRACE_SDK', str(sdk)), bringup,
+                ], scoped=True))
+            else:
+                startup.append(bringup)
         input_args.append('--no-target-collision-overlay')
         log_args = []
         if hardware_log:
             log_args = ['--log-dir', LaunchConfiguration('hardware_log_dir')]
+            if trace_session is not None:
+                log_args.extend(['--log-session-dir', str(trace_session)])
             input_args.append('--publish-timing')
         model = ExecuteProcess(
             cmd=[LaunchConfiguration('tracker_python'), str(example / 'gs_s1_hardware.py'),
@@ -139,6 +163,8 @@ def generate_launch_description():
         DeclareLaunchArgument('hardware_port', default_value='/dev/dexhand', description='RS485 device for the hardware backend'),
         DeclareLaunchArgument('hardware_log', default_value='false', choices=['true', 'false'],
                               description='Save hardware targets, commands, feedback and timings; no video'),
+        DeclareLaunchArgument('hardware_io_trace', default_value='false', choices=['true', 'false'],
+                              description='Include SDK serial send/response/ACK timings; starts a new hardware process'),
         DeclareLaunchArgument('hardware_log_dir', default_value=str(Path(__file__).resolve().parents[2] / 'logs/hardware'),
                               description='Parent directory for timestamped hardware diagnostic sessions'),
         DeclareLaunchArgument('controller_namespace', default_value='', description='Namespace of the default dexhand_controller'),

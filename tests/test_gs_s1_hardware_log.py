@@ -112,3 +112,21 @@ def test_serial_and_latest_timings_are_kept_separate(logs, tmp_path):
     assert summary['solve_ms']['mean'] == pytest.approx(100.)
     assert summary['serial_mano_and_solve_ms']['mean'] == pytest.approx(140.)
     assert summary['mano_fit_ms']['samples'] == 1
+
+
+def test_reserved_trace_session_retains_native_events_and_rejects_overwrite(logs, tmp_path):
+    directory = tmp_path / 'reserved'
+    directory.mkdir()
+    trace = directory / 'io_trace.jsonl'
+    trace.write_text('{"event":"io_trace_start","pid":1}\n'
+                     '{"event":"io_trace_end","pid":1,"written_events":0,"dropped_events":0}\n')
+    log = logs.HardwareSessionLog(tmp_path, {'io_trace_requested': True}, directory=directory)
+    log.record('controller_status', 1, active=True)
+    log.close()
+    summary = json.loads((directory / 'summary.json').read_text())
+    assert summary['serial_io']['available']
+    assert summary['serial_io']['clean_shutdown']
+    original = (directory / 'events.jsonl').read_text()
+    with pytest.raises(FileExistsError):
+        logs.HardwareSessionLog(tmp_path, {}, directory=directory)
+    assert (directory / 'events.jsonl').read_text() == original

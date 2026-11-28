@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Event, Thread
-from time import monotonic, monotonic_ns
+from time import monotonic, monotonic_ns, sleep
 from uuid import uuid4
 
 from gs_s1_hardware_commands import FINGER_JOINTS
@@ -27,14 +27,16 @@ def _json_value(value):
 class HardwareSessionLog:
     """Bound disk I/O outside the relay callbacks and account for any lost events."""
 
-    def __init__(self, root, metadata, *, queue_size=4096):
-        self.directory = Path(root).expanduser().resolve() / (
-            datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8])
-        self.directory.mkdir(parents=True)
+    def __init__(self, root, metadata, *, queue_size=4096, directory=None):
+        self.directory = (Path(directory).expanduser().resolve() if directory is not None else
+                          Path(root).expanduser().resolve() / (
+                              datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid4().hex[:8]))
+        self.directory.mkdir(parents=True, exist_ok=directory is not None)
         self.metadata = dict(format_version=1, created_at=datetime.now().astimezone().isoformat(),
                              **metadata)
         self._metadata_path = self.directory / 'session.json'
-        self._metadata_path.write_text(json.dumps(self.metadata, indent=2) + '\n')
+        with self._metadata_path.open('x') as output:
+            output.write(json.dumps(self.metadata, indent=2) + '\n')
         self.queue, self.stop = Queue(maxsize=queue_size), Event()
         self.dropped = self.written = self.sequence = 0
         self.error = None
@@ -58,7 +60,7 @@ class HardwareSessionLog:
 
     def _write(self):
         try:
-            with (self.directory / 'events.jsonl').open('w', buffering=65536) as output:
+            with (self.directory / 'events.jsonl').open('x', buffering=65536) as output:
                 last_flush = monotonic()
                 while not self.stop.is_set() or not self.queue.empty():
                     try:
@@ -86,6 +88,19 @@ class HardwareSessionLog:
                              dropped_events=self.dropped, writer_error=self.error,
                              pending_events=self.queue.qsize(), writer_stopped=not writer_alive)
         self.metadata['unwritten_events'] = self.sequence - self.written
+        if self.metadata.get('io_trace_requested'):
+            # ros2_control closes concurrently with the relay. Give its SDK
+            # writer a bounded chance to append its coverage footer on exit.
+            deadline = monotonic() + 2.
+            while monotonic() < deadline:
+                path = self.directory / 'io_trace.jsonl'
+                if path.exists():
+                    with path.open('rb') as source:
+                        source.seek(0, 2)
+                        source.seek(max(0, source.tell() - 1024))
+                        if b'"event":"io_trace_end"' in source.read():
+                            break
+                sleep(.05)
         self._metadata_path.write_text(json.dumps(self.metadata, indent=2) + '\n')
         if not writer_alive and (self.directory / 'events.jsonl').exists():
             summary = summarize(self.directory)
@@ -182,6 +197,7 @@ def summarize(directory):
              for kind, count in counts.items()}
     fresh_hz = ((fresh_samples - 1) * 1e9 / (last_sample_ns - first_sample_ns)
                 if fresh_samples > 1 and last_sample_ns > first_sample_ns and not sample_time_discontinuities else None)
+    from gs_s1_io_trace import summarize_io
     return dict(event_counts=dict(counts), callback_rates_hz=rates,
                 target_source_age_ms=_stats(ages), detection_ms=_stats(detect_ms),
                 mano_fit_ms=_stats(mano_ms), solve_ms=_stats(solve_ms),
@@ -195,6 +211,7 @@ def summarize(directory):
                 duplicate_hardware_samples=duplicate_samples, io_poll_interval_ms=_stats(poll_ms),
                 hardware_stamp_discontinuities=sample_time_discontinuities,
                 io_read_duration_ms=_stats(read_ms), invalid_json_lines=invalid_lines,
+                serial_io=summarize_io(directory / 'io_trace.jsonl'),
                 note='Callback rates are receipt rates. joint_states can repeat old hardware readings; '
                      'only valid, distinct HandSample acquisitions count as fresh hardware samples. '
                      'Target source age includes capture, vision, solve and delivery. Command events '

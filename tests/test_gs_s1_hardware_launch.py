@@ -83,3 +83,26 @@ def test_hardware_logging_is_opt_in_and_wires_both_processes(launch_module, tmp_
 def test_hardware_log_rejects_simulation_backend(launch_module):
     with pytest.raises(ValueError, match='hardware_log requires'):
         launch_module.start_preview(context(launch_module, 'mujoco', hardware_log='true'))
+
+
+@pytest.mark.parametrize('overrides', [dict(hardware_log='false'), dict(hardware_log='true', start_hardware='false')])
+def test_io_trace_requires_logging_and_new_controller_process(launch_module, overrides):
+    with pytest.raises(ValueError, match='hardware_io_trace requires'):
+        launch_module.start_preview(context(launch_module, 'hardware', hardware_io_trace='true', **overrides))
+
+
+def test_io_trace_is_scoped_to_hardware_bringup(launch_module, tmp_path):
+    from launch.actions import GroupAction, IncludeLaunchDescription, SetEnvironmentVariable
+    from launch.utilities import perform_substitutions
+    ctx = context(launch_module, 'hardware', hardware_log='true', hardware_io_trace='true',
+                  hardware_log_dir=str(tmp_path))
+    group, relay, tracker = launch_module.start_preview(ctx)
+    assert isinstance(group, GroupAction)
+    entities = list(group.get_sub_entities())
+    assert sum(isinstance(entity, SetEnvironmentVariable) for entity in entities) == 3
+    assert any(isinstance(entity, IncludeLaunchDescription) for entity in entities)
+    relay_cmd = [perform_substitutions(ctx, arg) for arg in relay.cmd]
+    directory = Path(relay_cmd[relay_cmd.index('--log-session-dir') + 1])
+    assert directory.parent == tmp_path
+    assert directory.is_dir()
+    assert '--log-session-dir' not in [perform_substitutions(ctx, arg) for arg in tracker.cmd]

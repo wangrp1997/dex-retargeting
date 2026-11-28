@@ -51,7 +51,9 @@ class HardwareRelay(Node):
                 hand=args.hand, controller=controller, ros_domain_id=os.environ.get('ROS_DOMAIN_ID', '0'),
                 command_protocol='18 positions; controller fills default velocity/effort/tactile',
                 expected_controller_velocity_rad_s=1.5708, relay_max_velocity_rad_s=1.5708,
-                relay_timer_period_s=.02, note='No images or video. Publication is not physical application.'))
+                relay_timer_period_s=.02, io_trace_requested=getattr(args, 'log_session_dir', None) is not None,
+                note='No images or video. Publication is not physical application.'),
+                directory=getattr(args, 'log_session_dir', None))
             self.get_logger().info(f'Hardware diagnostics: {self.session_log.directory}')
             self.create_subscription(String, '/gs_s1_preview/pipeline_timing', self.pipeline_timing, 20)
             try:
@@ -207,7 +209,10 @@ def main():
     parser.add_argument('--hand', choices=('right', 'left'), default='left')
     parser.add_argument('--controller-namespace', default='')
     parser.add_argument('--log-dir', type=Path, help='Enable hardware diagnostics under this directory')
+    parser.add_argument('--log-session-dir', type=Path, help='Session reserved by the IO tracing launch')
     args = parser.parse_args()
+    if args.log_session_dir and not args.log_dir:
+        parser.error('--log-session-dir requires --log-dir')
     rclpy.init(args=[])
     node = HardwareRelay(args)
     try:
